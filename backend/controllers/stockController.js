@@ -1,7 +1,7 @@
 // controllers/stockController.js
 // Serves stock price history, ML prediction metadata, and portfolio data.
 // Prices: real yfinance data via Python subprocess OR KNOWN_PRICES fallback.
-// AI predictions: calls Python Flask AI service for ML predictions.
+// AI predictions: calls deployed Flask AI service via API.
 
 // ── KNOWN PRICES (accurate recent approximates) ───────────────────────────────
 const KNOWN_PRICES = {
@@ -79,180 +79,40 @@ function generateHistory(ticker, months) {
   return rows;
 }
 
-// ── Simple rule-based prediction (no ML needed in Node) ──────────────────────
-function computePrediction(ticker, rows) {
-  const closes = rows.map(r => r.close);
-  const n = closes.length;
-  if (n < 50) return null;
-
-  const ma10  = closes.slice(-10).reduce((a,b) => a + b, 0) / 10;
-  const ma50  = closes.slice(-50).reduce((a,b) => a + b, 0) / 50;
-  const ma200 = closes.slice(-Math.min(200, n)).reduce((a,b) => a + b, 0) / Math.min(200, n);
-  const last  = closes[n - 1];
-  const prev  = closes[n - 2];
-  const ret   = (last - prev) / prev;
-
-  // Volatility
-  const rets = [];
-  for (let i = 1; i < Math.min(15, n); i++) rets.push((closes[n-i] - closes[n-i-1]) / closes[n-i-1]);
-  const vol = Math.sqrt(rets.reduce((a,r) => a + r*r, 0) / rets.length);
-
-  // RSI (14)
-  const diffs = closes.slice(-15).map((v,i,a) => i ? v - a[i-1] : 0).slice(1);
-  const gains = diffs.filter(d => d > 0).reduce((a,b) => a+b, 0) / 14;
-  const losses = diffs.filter(d => d < 0).map(Math.abs).reduce((a,b) => a+b, 0) / 14;
-  const rsi = losses === 0 ? 100 : 100 - 100 / (1 + gains / losses);
-
-  // MACD
-  const ema = (arr, span) => arr.reduce((acc, v, i) => {
-    const k = 2 / (span + 1);
-    return i === 0 ? v : acc * (1 - k) + v * k;
-  }, arr[0]);
-  const recentCloses = closes.slice(-30);
-  const macd = ema(recentCloses, 12) - ema(recentCloses, 26);
-
-  // Trend
-  let trend, tdir;
-  if (last > ma50 && ma50 > ma200)  { trend = 'Upward Trend';   tdir = 'up';   }
-  else if (last < ma50 && ma50 < ma200) { trend = 'Downward Trend'; tdir = 'down'; }
-  else                               { trend = 'Sideways';       tdir = 'side'; }
-
-  // Direction
-  const bullScore = (last > ma10 ? 1 : 0) + (last > ma50 ? 1 : 0) + (macd > 0 ? 1 : 0) + (rsi < 70 && rsi > 40 ? 1 : 0);
-  const direction = bullScore >= 3 ? 'UP' : bullScore <= 1 ? 'DOWN' : 'STABLE';
-  const confidence = Math.round(50 + bullScore * 8 + Math.random() * 8);
-
-  // Risk
-  let risk, rlv;
-  if (vol < 0.012)      { risk = 'Low Risk';    rlv = 'low'; }
-  else if (vol < 0.025) { risk = 'Medium Risk'; rlv = 'mid'; }
-  else                  { risk = 'High Risk';   rlv = 'high'; }
-
-  // Signal
-  const signal     = direction === 'UP' && confidence >= 70 ? 5 : direction === 'UP' ? 4 : direction === 'STABLE' ? 3 : confidence < 60 ? 1 : 2;
-  const signal_lbl = {5:'Strong Buy',4:'Buy',3:'Hold',2:'Sell',1:'Strong Sell'}[signal];
-
-  const tbadge     = {up:'Bullish', side:'Neutral', down:'Bearish'}[tdir];
-  const tbadge_cls = {up:'', side:'neutral-badge', down:'bearish-badge'}[tdir];
-
-  const reasons = [
-    { text: `Trend strength: ${Math.abs(last - ma50) / ma50 > 0.03 ? 'Strong' : 'Weak'}`, warn: false },
-    { text: `Volatility: ${vol > 0.02 ? 'High ⚠' : vol > 0.012 ? 'Moderate' : 'Low'}`,   warn: vol > 0.02 },
-    { text: `RSI ${rsi.toFixed(1)} — ${rsi > 70 ? 'Overbought ⚠' : rsi < 30 ? 'Oversold ⚠' : 'Neutral zone'}`, warn: rsi > 70 || rsi < 30 },
-    { text: `MACD: ${macd > 0 ? 'Bullish crossover ▲' : 'Bearish crossover ▼'}`,          warn: macd < 0 },
-    { text: `Price vs MA50: ${last > ma50 ? 'above ✓' : 'below ✗'}`,                       warn: last < ma50 },
-  ];
-
-  const analysis =
-    `${tbadge} signal detected. Last close ₹${last.toLocaleString('en-IN')} is ` +
-    `${last > ma50 ? 'above' : 'below'} the 50-day MA (₹${ma50.toFixed(0)}). ` +
-    `RSI at ${rsi.toFixed(0)} indicates ${rsi > 70 ? 'overbought conditions — consider booking profits' : rsi < 30 ? 'oversold conditions — potential reversal ahead' : 'a normal trading range'}. ` +
-    `MACD is ${macd > 0 ? 'positive (bullish momentum)' : 'negative (bearish momentum)'}. ` +
-    `Model confidence: ${confidence}%.`;
-
-  return {
-    direction, confidence,
-    trend, trend_dir: tdir, trend_badge: tbadge, trend_badge_cls: tbadge_cls,
-    risk, risk_lv: rlv, risk_badge: rlv.toUpperCase(),
-    conf_lbl: confidence >= 75 ? 'High Confidence' : confidence >= 55 ? 'Moderate Confidence' : 'Low Confidence',
-    conf_badge: confidence >= 75 ? 'HIGH' : confidence >= 55 ? 'MED' : 'LOW',
-    signal, signal_lbl,
-    reasons, analysis,
-    close: +last.toFixed(2),
-    change_pct: +(ret * 100).toFixed(2),
-    ma10: +ma10.toFixed(2), ma50: +ma50.toFixed(2), ma200: +ma200.toFixed(2),
-    rsi: +rsi.toFixed(1), macd: +macd.toFixed(2), vol: +(vol * 100).toFixed(2),
-  };
-}
+// ── Prediction logic moved to AI service ─────────────────────────────────────
 
 // ── AI Service Integration ─────────────────────────────────────────────
-async function callAIService(ticker, endpoint = 'predict') {
-  const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:5001';
-  
-  try {
-    const response = await fetch(`${AI_SERVICE_URL}/${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ 
-        ticker: ticker,
-        months: 12
-      }),
-      timeout: 10000
-    });
-
-    if (!response.ok) {
-      throw new Error(`AI service responded with ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.warn(`AI service call failed for ${ticker}:`, error.message);
-    return null;
-  }
-}
+const axios = require("axios");
 
 // ── GET /api/stocks/predict?ticker=X ─────────────────────────────────────────
 exports.predict = async (req, res) => {
-  const ticker = (req.query.ticker || 'RELIANCE').toUpperCase();
-  const kp     = KNOWN_PRICES[ticker] || { close: 500, prev: 490, name: ticker, sector: 'Equity', mcap: '—' };
-  
   try {
-    // Try to get prediction from AI service first
-    const aiResponse = await callAIService(ticker, 'predict');
-    
-    if (aiResponse && aiResponse.ok) {
-      const aiPred = aiResponse.prediction;
-      
-      // Transform AI prediction to match expected format
-      const prediction = {
-        direction: aiPred.trend_dir === 'up' ? 'UP' : aiPred.trend_dir === 'down' ? 'DOWN' : 'STABLE',
-        confidence: aiPred.confidence,
-        trend: aiPred.trend,
-        trend_dir: aiPred.trend_dir,
-        trend_badge: aiPred.trend_badge,
-        risk: aiPred.risk,
-        risk_lv: aiPred.risk_lv,
-        risk_badge: aiPred.risk_badge,
-        conf_lbl: aiPred.conf_lbl,
-        conf_badge: aiPred.conf_badge,
-        signal: aiPred.signal,
-        signal_lbl: aiPred.signal_lbl,
-        reasons: aiPred.reasons,
-        analysis: aiPred.analysis,
-        close: kp.close,
-        change_pct: +(((kp.close - kp.prev) / kp.prev) * 100).toFixed(2),
-        ai_model: 'python-flask-v2'
-      };
+    const ticker = req.query.ticker;
 
-      return res.json({
-        ok: true,
-        ticker,
-        name: kp.name,
-        sector: kp.sector,
-        mcap: kp.mcap,
-        ...prediction,
-      });
-    }
+    // Call deployed AI service
+    const aiResponse = await axios.get(
+      `${process.env.AI_API_URL}/predict?ticker=${ticker}` 
+    );
+
+    // Return AI response directly
+    return res.json({
+      ...aiResponse.data,
+      ai_model: "flask-ai"
+    });
+
   } catch (error) {
-    console.warn('AI prediction failed, using fallback:', error.message);
+    console.error("AI service failed:", error.message);
+
+    // Fallback response (only if AI fails)
+    return res.json({
+      ok: true,
+      ticker: req.query.ticker,
+      trend: "Sideways",
+      risk: "Medium",
+      confidence: 50,
+      ai_model: "local-fallback"
+    });
   }
-
-  // Fallback to local prediction
-  const rows = generateHistory(ticker, 14);
-  const pred = computePrediction(ticker, rows);
-
-  res.json({
-    ok: true,
-    ticker,
-    name:   kp.name,
-    sector: kp.sector,
-    mcap:   kp.mcap,
-    ...pred,
-    ai_model: 'local-fallback'
-  });
 };
 
 // ── GET /api/stocks/history?ticker=X&months=12 ────────────────────────────────

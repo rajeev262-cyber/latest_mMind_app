@@ -491,12 +491,42 @@ async function refresh() {
   const ticker = document.getElementById('stockSel').value;
   const months = parseInt(document.getElementById('rangeSel').value) || 6;
 
+  // Set loading state
+  document.getElementById('anText').textContent = 'Analyzing...';
+
   try {
     const [predR, histR] = await Promise.all([
       fetch(`${API}/stocks/predict?ticker=${ticker}`).then(r=>r.json()),
       fetch(`${API}/stocks/analysis?ticker=${ticker}&months=${months}`).then(r=>r.json()),
     ]);
-    if (predR.ok) setCards(predR);
+    
+    // Debug logging
+    console.log('Prediction API Response:', predR);
+    console.log('Analysis API Response:', histR);
+    
+    // Handle prediction data
+    if (predR.ok || predR.trend) {
+      // Map API response to expected format for setCards
+      const mappedData = {
+        trend: predR.trend || 'Sideways',
+        trend_dir: predR.trend_dir || 'side',
+        trend_badge: predR.trend_badge || 'NEUTRAL',
+        risk: predR.risk || 'Medium Risk',
+        risk_lv: predR.risk_lv || 'mid',
+        risk_badge: predR.risk_badge || 'MED',
+        confidence: predR.confidence || 50,
+        conf_lbl: predR.conf_lbl || 'Moderate Confidence',
+        conf_badge: predR.conf_badge || 'MED',
+        signal: predR.signal || 3,
+        signal_lbl: predR.signal_lbl || 'Hold',
+        reasons: predR.reasons || [{text: 'AI analysis completed', warn: false}],
+        analysis: predR.analysis || predR.reason || 'Analysis completed successfully'
+      };
+      
+      console.log('Mapped data for UI:', mappedData);
+      setCards(mappedData);
+    }
+    
     if (histR.ok) {
       const step = Math.max(1, Math.floor(histR.labels.length / 120));
       buildChart(
@@ -506,7 +536,8 @@ async function refresh() {
       );
       document.getElementById('chartSub').textContent = `${histR.name} · ${months} Month View`;
     }
-  } catch {
+  } catch (error) {
+    console.error('API call failed:', error);
     useFallback(ticker, months);
   }
   

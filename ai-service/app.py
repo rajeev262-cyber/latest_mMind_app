@@ -4,6 +4,7 @@ import os
 import json
 import random
 import numpy as np
+from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -91,7 +92,7 @@ def health_check():
         'status': 'MarketMind AI Service v2.0 running',
         'model_loaded': predictor.model_loaded,
         'env': os.environ.get('FLASK_ENV', 'production'),
-        'time': os.popen('date').read().strip()
+        'time': datetime.utcnow().isoformat() + 'Z'
     })
 
 @app.route('/predict', methods=['POST'])

@@ -286,6 +286,11 @@
           </div>
           <div class="chart-wrap"><canvas id="myChart"></canvas></div>
         </div>
+        
+        <!-- Stock Price Chart -->
+        <div class="chart-container">
+          <canvas id="stockChart"></canvas>
+        </div>
 
         <!-- Merged AI Reasoning + Market Analysis -->
         <div class="ai-panel">
@@ -315,6 +320,71 @@ const API = 'https://marketmind-backend-w8gx.onrender.com/api';
 const user = localStorage.getItem('loggedInUser') || localStorage.getItem('mm_user') || 'Analyst';
 document.getElementById('sideUser').textContent = user;
 document.getElementById('userAvatar').textContent = user.slice(0,2).toUpperCase();
+
+/* ── Stock Chart Function ───────────────────────────────────── */
+let stockChart;
+
+async function loadChart(ticker, range) {
+  try {
+    const res = await fetch(
+      `https://marketmind-backend-w8gx.onrender.com/api/stocks/history?ticker=${ticker}&months=${range}` 
+    );
+    const data = await res.json();
+
+    if (data.ok && data.data) {
+      const labels = data.data.map(d => d.date);
+      const prices = data.data.map(d => d.close);
+
+      const ctx = document.getElementById("stockChart").getContext("2d");
+
+      if (stockChart) stockChart.destroy();
+
+      stockChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [{
+            label: `${ticker} Price`,
+            data: prices,
+            borderWidth: 2,
+            borderColor: '#4ade80',
+            backgroundColor: 'rgba(74, 222, 128, 0.1)',
+            tension: 0.3,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top'
+            }
+          },
+          scales: {
+            x: {
+              display: true,
+              title: {
+                display: true,
+                text: 'Date'
+              }
+            },
+            y: {
+              display: true,
+              title: {
+                display: true,
+                text: 'Price (₹)'
+              }
+            }
+          }
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error loading stock chart:', error);
+  }
+}
 
 document.getElementById('logoutBtn').addEventListener('click', e => {
   e.preventDefault();
@@ -439,6 +509,9 @@ async function refresh() {
   } catch {
     useFallback(ticker, months);
   }
+  
+  // Load stock chart
+  loadChart(ticker, months);
   sessionStorage.setItem('mm_ticker', ticker);
 }
 
@@ -466,5 +539,6 @@ function runPredict() {
 
 window.addEventListener('DOMContentLoaded', refresh);
 </script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </body>
 </html>

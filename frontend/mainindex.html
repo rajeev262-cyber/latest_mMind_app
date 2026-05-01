@@ -313,8 +313,8 @@
   <div class="spin"></div>
 </div>
 
+<script src="api-config.js"></script>
 <script>
-const API = 'https://marketmind-backend-w8gx.onrender.com/api';
 
 /* ── Auth guard ──────────────────────────────────────────── */
 const user = localStorage.getItem('loggedInUser') || localStorage.getItem('mm_user') || 'Analyst';
@@ -326,10 +326,9 @@ let stockChart;
 
 async function loadChart(ticker, range) {
   try {
-    const res = await fetch(
-      `https://marketmind-backend-w8gx.onrender.com/api/stocks/history?ticker=${ticker}&months=${range}` 
+    const data = await API_CONFIG.fetchWithErrorHandling(
+      API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.HISTORY + `?ticker=${ticker}&months=${range}`)
     );
-    const data = await res.json();
 
     if (data.ok && data.data) {
       const labels = data.data.map(d => d.date);
@@ -496,8 +495,8 @@ async function refresh() {
 
   try {
     const [predR, histR] = await Promise.all([
-      fetch(`${API}/stocks/predict?ticker=${ticker}`).then(r=>r.json()),
-      fetch(`${API}/stocks/analysis?ticker=${ticker}&months=${months}`).then(r=>r.json()),
+      API_CONFIG.fetchWithErrorHandling(API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.PREDICT + `?ticker=${ticker}`)),
+      API_CONFIG.fetchWithErrorHandling(API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.ANALYSIS + `?ticker=${ticker}&months=${months}`))
     ]);
     
     // Debug logging

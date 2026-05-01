@@ -22,6 +22,7 @@ const allowedOrigins = [
   'http://127.0.0.1:5500',
   'http://127.0.0.1:3000',
   process.env.FRONTEND_URL,
+  'https://frontend-mmind-app.onrender.com',
   'https://marketmind-frontend.onrender.com',
   'https://marketmind-frontend.vercel.app',
   'https://marketmind-frontend.netlify.app',

@@ -189,8 +189,8 @@
   </div>
 </div>
 
+<script src="api-config.js"></script>
 <script>
-const API = 'https://marketmind-backend-w8gx.onrender.com/api';
 document.getElementById('navUser').textContent = localStorage.getItem('mm_user') || 'Analyst';
 
 let currentCat = 'india';
@@ -207,8 +207,9 @@ async function loadNews(cat) {
   showSkeletons();
 
   try {
-    const res  = await fetch(`${API}/news?category=${cat}`);
-    const data = await res.json();
+    const data = await API_CONFIG.fetchWithErrorHandling(
+      API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.NEWS.FEED + `?category=${cat}`)
+    );
     if (data.ok) renderNews(data.articles, data.source);
     else throw new Error('API error');
   } catch {

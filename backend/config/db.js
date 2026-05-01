@@ -1,0 +1,19 @@
+// config/db.js — MongoDB connection
+
+const mongoose = require('mongoose');
+
+const connectDB = async () => {
+  try {
+    const conn = await mongoose.connect(process.env.MONGO_URI, {
+      useNewUrlParser:    true,
+      useUnifiedTopology: true,
+    });
+    console.log(`✅ MongoDB connected: ${conn.connection.host}`);
+  } catch (error) {
+    console.error(`❌ MongoDB connection error: ${error.message}`);
+    // Graceful fallback — run without DB using in-memory users
+    console.warn('⚠️  Running in offline mode (no MongoDB). Using hardcoded users.');
+  }
+};
+
+module.exports = connectDB;

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MarketMind — AI-powered stock predictions</title>
+  <link rel="stylesheet" href="introstyle.css" />
+  
+</head>
+<body>
+
+  <!-- Candlestick chart background (drawn via JS canvas) -->
+  <canvas id="bgCanvas"></canvas>
+
+  <!-- Network / dot grid overlay -->
+  <div class="network-overlay" id="networkOverlay"></div>
+
+  <!-- Hero content -->
+  <main class="hero">
+
+    <!-- Logo mark + wordmark -->
+    <div class="brand" id="brand">
+      <svg class="logo-icon" viewBox="0 0 90 70" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <!-- Left figure (blue, seated/crouching) -->
+        <circle cx="18" cy="30" r="7" fill="url(#figBlue)"/>
+        <path d="M10 52 Q14 38 18 36 Q22 38 26 52" fill="url(#figBlue)" stroke="none"/>
+        <!-- Middle figure (green dot head, tallest) -->
+        <circle cx="45" cy="18" r="8" fill="url(#figGreen)"/>
+        <path d="M36 55 Q40 34 45 30 Q50 34 54 55" fill="url(#figGreen)" stroke="none"/>
+        <!-- Right figure (blue/violet, medium) -->
+        <circle cx="72" cy="25" r="7" fill="url(#figViolet)"/>
+        <path d="M63 55 Q67 40 72 36 Q77 40 81 55" fill="url(#figViolet)" stroke="none"/>
+
+        <!-- Chart line overlay (M shape) -->
+        <polyline
+          points="10,52 28,28 45,42 62,18 80,36"
+          fill="none"
+          stroke="url(#lineGrad)"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          opacity="0.55"
+        />
+
+        <defs>
+          <linearGradient id="figBlue" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#38b6ff"/>
+            <stop offset="100%" stop-color="#5271ff"/>
+          </linearGradient>
+          <linearGradient id="figGreen" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#3ecf72"/>
+            <stop offset="100%" stop-color="#22a86a"/>
+          </linearGradient>
+          <linearGradient id="figViolet" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#5a8fff"/>
+            <stop offset="100%" stop-color="#7c5cfc"/>
+          </linearGradient>
+          <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#38b6ff"/>
+            <stop offset="100%" stop-color="#3ecf72"/>
+          </linearGradient>
+        </defs>
+      </svg>
+
+      <h1 class="wordmark">
+        <span class="word-market">Market</span><span class="word-mind">Mind</span>
+      </h1>
+    </div>
+
+    <!-- Tagline -->
+    <p class="tagline" id="tagline">Predict Smarter, Invest Better</p>
+
+    <!-- CTA button -->
+    <button class="cta-btn" id="ctaBtn" onclick="handleGetStarted()">
+      <span>Get Started</span>
+    </button>
+
+  </main>
+
+  <script src="introscript.js"></script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+# Render Deployment Configuration
+services:
+  # Backend API Service
+  - type: web
+    name: marketmind-backend
+    env: node
+    plan: free
+    repo: https://github.com/your-username/marketmind-v2
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGO_URI
+        sync: false  # Set this manually in Render dashboard
+      - key: JWT_SECRET
+        sync: false  # Set this manually in Render dashboard
+      - key: FINNHUB_API_KEY
+        sync: false  # Set this manually in Render dashboard
+      - key: FRONTEND_URL
+        value: https://marketmind-frontend.onrender.com
+      - key: AI_SERVICE_URL
+        value: https://marketmind-ai.onrender.com
+
+  # Python AI Service
+  - type: web
+    name: marketmind-ai
+    env: python
+    plan: free
+    repo: https://github.com/your-username/marketmind-v2
+    rootDir: ai-service
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0
+      - key: PORT
+        value: 5001
+      - key: FLASK_ENV
+        value: production
+
+  # Frontend Static Site
+  - type: web
+    name: marketmind-frontend
+    env: static
+    plan: free
+    repo: https://github.com/your-username/marketmind-v2
+    rootDir: frontend
+    buildCommand: ""
+    publishPath: .
+    envVars:
+      - key: NODE_ENV
+        value: production

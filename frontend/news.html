@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MarketMind — Market News</title>
+  <link rel="stylesheet" href="global.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    .app-layout { overflow: hidden; }
+    .main-content { overflow-y: auto; }
+
+    /* ── Topnav (non-sidebar pages reuse this navbar) ─── */
+    .topnav {
+      position: sticky; top: 0; z-index: 30;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 58px;
+      background: rgba(5,16,31,.88); border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(18px);
+    }
+    .topnav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .topnav-logo-text { font-size: 1.1rem; font-weight: 700; color: #fff; letter-spacing: -.02em; }
+    .topnav-logo-text em { font-style: normal; color: var(--blue); }
+    .topnav-links { display: flex; gap: 6px; }
+    .topnav-link { padding: 6px 14px; border-radius: var(--r-sm); font-size: 13px; color: var(--muted); text-decoration: none; font-family: var(--font-ui); transition: color var(--ease), background var(--ease); }
+    .topnav-link:hover  { color: var(--text); background: rgba(255,255,255,.05); }
+    .topnav-link.active { color: #fff; background: rgba(56,189,248,.1); }
+    .topnav-user { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-dim); font-family: var(--font-ui); }
+    .topnav-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .topnav-mobile-menu { display: none; }
+
+    @media (max-width: 700px) {
+      .topnav { padding: 0 14px; }
+      .topnav-links { display: none; }
+      .topnav-user  { display: none; }
+      .topnav-mobile-menu { display: flex; }
+    }
+
+    /* ── Page wrapper ─────────────────────────────────── */
+    .news-wrapper { max-width: 1100px; margin: 0 auto; padding: 32px 24px 60px; }
+
+    /* ── Header ──────────────────────────────────────── */
+    .news-header { margin-bottom: 28px; }
+    .news-header h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .news-header p  { color: var(--muted); font-size: .95rem; font-style: italic; }
+    .news-header-row { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 6px; }
+    .live-badge { display: flex; align-items: center; gap: 6px; font-size: .75rem; font-family: var(--font-ui); color: var(--green); font-weight: 600; padding: 4px 10px; background: rgba(74,222,128,.1); border: 1px solid rgba(74,222,128,.2); border-radius: 99px; }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+
+    /* ── Category tabs ───────────────────────────────── */
+    .cat-tabs { display: flex; gap: 6px; margin-bottom: 24px; flex-wrap: wrap; }
+    .cat-tab {
+      padding: 7px 18px; border-radius: 99px;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--muted); font-size: 13px; font-family: var(--font-ui);
+      font-weight: 500; cursor: pointer;
+      transition: all var(--ease);
+    }
+    .cat-tab:hover  { color: var(--text); border-color: var(--border-h); }
+    .cat-tab.active { color: var(--blue); background: rgba(56,189,248,.1); border-color: rgba(56,189,248,.3); }
+
+    /* ── News grid ───────────────────────────────────── */
+    .news-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 14px;
+    }
+
+    /* ── News card ───────────────────────────────────── */
+    .news-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 18px 20px;
+      display: flex; flex-direction: column; gap: 10px;
+      cursor: pointer; text-decoration: none;
+      transition: background var(--ease), border-color var(--ease), transform var(--ease);
+      position: relative; overflow: hidden;
+    }
+    .news-card:hover { background: var(--surface2); border-color: var(--border-h); transform: translateY(-2px); }
+    .news-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+    .news-card.bull::before { background: linear-gradient(90deg, var(--green), transparent); }
+    .news-card.bear::before { background: linear-gradient(90deg, var(--red), transparent); }
+    .news-card.neutral::before { background: linear-gradient(90deg, var(--blue), transparent); }
+
+    .nc-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .nc-source { font-size: .75rem; font-weight: 600; color: var(--blue); font-family: var(--font-ui); }
+    .nc-tag { font-size: .65rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; text-transform: uppercase; letter-spacing: .05em; font-family: var(--font-ui); }
+    .nc-tag.bull    { background: rgba(74,222,128,.12);  color: var(--green); border: 1px solid rgba(74,222,128,.2); }
+    .nc-tag.bear    { background: rgba(248,113,113,.12); color: var(--red);   border: 1px solid rgba(248,113,113,.2); }
+    .nc-tag.neutral { background: rgba(56,189,248,.12);  color: var(--blue);  border: 1px solid rgba(56,189,248,.2); }
+
+    .nc-title { font-size: 14.5px; font-weight: 600; color: var(--text); line-height: 1.45; font-family: var(--font-serif); }
+    .nc-desc  { font-size: 12.5px; color: var(--text-dim); line-height: 1.6; font-style: italic; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .nc-footer { display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
+    .nc-time { font-size: .72rem; color: var(--muted); font-family: var(--font-ui); }
+    .nc-arrow { color: var(--muted2); font-size: 14px; }
+
+    /* ── Featured (first card) ───────────────────────── */
+    .news-grid .news-card:first-child {
+      grid-column: 1 / -1;
+      flex-direction: row; gap: 20px; padding: 22px 24px;
+    }
+    .news-grid .news-card:first-child .nc-title { font-size: 1.1rem; }
+    .news-grid .news-card:first-child .nc-desc  { -webkit-line-clamp: 4; }
+    .fc-badge {
+      font-size: .65rem; font-weight: 700; padding: 2px 8px; border-radius: 99px;
+      background: rgba(129,140,248,.12); color: var(--purple);
+      border: 1px solid rgba(129,140,248,.25); font-family: var(--font-ui); margin-left: auto;
+    }
+    .fc-body { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+
+    @media (max-width: 680px) {
+      .news-grid .news-card:first-child { flex-direction: column; }
+      .news-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── Skeleton loaders ─────────────────────────────── */
+    .skeleton { background: linear-gradient(90deg, var(--surface) 25%, var(--surface2) 50%, var(--surface) 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: var(--r); }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+    .skel-card { height: 160px; }
+    .skel-card.featured { height: 120px; grid-column: 1/-1; }
+
+    /* ── Error / empty state ─────────────────────────── */
+    .state-box { grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--muted); }
+    .state-box h3 { font-size: 1rem; margin-bottom: 6px; font-style: italic; }
+
+    /* ── Count badge ─────────────────────────────────── */
+    .count-info { font-size: 12px; color: var(--muted); font-family: var(--font-ui); margin-bottom: 16px; }
+    .source-tag { font-size: .7rem; padding: 2px 7px; background: rgba(56,189,248,.1); color: var(--blue); border-radius: 4px; font-family: var(--font-ui); }
+
+    @media (max-width: 480px) {
+      .news-wrapper { padding: 20px 14px 40px; }
+      .cat-tab { padding: 6px 12px; font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+<div class="app-layout" style="flex-direction:column;height:auto;overflow:visible;">
+  <!-- Navbar -->
+  <nav class="topnav">
+    <a href="introindex.html" class="topnav-logo">
+      <svg width="28" height="22" viewBox="0 0 60 40" fill="none">
+        <circle cx="28" cy="14" r="5" fill="#4ade80"/><circle cx="18" cy="26" r="4" fill="#38bdf8"/><circle cx="40" cy="20" r="4" fill="#818cf8"/>
+        <polyline points="18,26 28,14 40,20" stroke="url(#ng)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <defs><linearGradient id="ng" x1="18" y1="26" x2="40" y2="20" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#4ade80"/></linearGradient></defs>
+      </svg>
+      <span class="topnav-logo-text">Market<em>Mind</em></span>
+    </a>
+    <div class="topnav-links">
+      <a href="mainindex.html" class="topnav-link">Dashboard</a>
+      <a href="search.html"    class="topnav-link">Search</a>
+      <a href="portfolio.html" class="topnav-link">Portfolio</a>
+      <a href="news.html"      class="topnav-link active">News</a>
+    </div>
+    <div class="topnav-user">
+      <div class="topnav-dot"></div>
+      <span id="navUser">Analyst</span>
+    </div>
+    <button class="topnav-mobile-menu hamburger" onclick="window.location.href='mainindex.html'" aria-label="Menu">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+  </nav>
+
+  <div class="main-content" style="overflow:visible;">
+    <div class="news-wrapper">
+      <div class="news-header">
+        <div class="news-header-row">
+          <h1>Market <span class="grad-text">News</span></h1>
+          <div class="live-badge"><div class="live-dot"></div>Live · Finnhub</div>
+        </div>
+        <p>Real-time financial headlines from Indian &amp; global markets</p>
+      </div>
+
+      <div class="cat-tabs">
+        <button class="cat-tab active" data-cat="india">🇮🇳 India Markets</button>
+        <button class="cat-tab" data-cat="economy">🌐 Economy</button>
+        <button class="cat-tab" data-cat="all">📰 All News</button>
+      </div>
+
+      <div class="count-info" id="countInfo"></div>
+      <div class="news-grid" id="newsGrid">
+        <div class="skeleton skel-card featured"></div>
+        <div class="skeleton skel-card"></div>
+        <div class="skeleton skel-card"></div>
+        <div class="skeleton skel-card"></div>
+        <div class="skeleton skel-card"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.hostname === 'localhost' 
+  ? 'http://localhost:5000/api' 
+  : 'https://marketmind-backend.onrender.com/api';
+document.getElementById('navUser').textContent = localStorage.getItem('mm_user') || 'Analyst';
+
+let currentCat = 'india';
+
+/* ── Category tabs ─────────────────────────────────────── */
+document.querySelectorAll('.cat-tab').forEach(btn =>
+  btn.addEventListener('click', () => { currentCat = btn.dataset.cat; loadNews(currentCat); })
+);
+
+/* ── Load & render news ────────────────────────────────── */
+async function loadNews(cat) {
+  currentCat = cat;
+  document.querySelectorAll('.cat-tab').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
+  showSkeletons();
+
+  try {
+    const res  = await fetch(`${API}/news?category=${cat}`);
+    const data = await res.json();
+    if (data.ok) renderNews(data.articles, data.source);
+    else throw new Error('API error');
+  } catch {
+    renderNews(FALLBACK_NEWS.filter(a => cat === 'all' || a.category === cat), 'fallback');
+  }
+}
+
+function showSkeletons() {
+  document.getElementById('countInfo').textContent = '';
+  document.getElementById('newsGrid').innerHTML = `
+    <div class="skeleton skel-card featured"></div>
+    <div class="skeleton skel-card"></div><div class="skeleton skel-card"></div>
+    <div class="skeleton skel-card"></div><div class="skeleton skel-card"></div>`;
+}
+
+function renderNews(articles, src) {
+  const grid = document.getElementById('newsGrid');
+  const info = document.getElementById('countInfo');
+
+  if (!articles.length) {
+    grid.innerHTML = `<div class="state-box"><h3>No articles found for this category.</h3><p>Try "All News" or check back later.</p></div>`;
+    info.textContent = '';
+    return;
+  }
+
+  info.innerHTML = `${articles.length} articles &nbsp;<span class="source-tag">${src === 'finnhub' ? '✓ Live Finnhub' : src === 'fallback' ? '⚡ Fallback data' : src}</span>`;
+
+  grid.innerHTML = articles.map((a, i) => {
+    const sent  = a.sentiment || 'neutral';
+    const label = sent === 'bull' ? 'Bullish' : sent === 'bear' ? 'Bearish' : 'Neutral';
+    const href  = a.url && a.url !== '#' ? a.url : '#';
+    const isFirst = i === 0;
+
+    if (isFirst) {
+      return `
+        <a class="news-card ${sent}" href="${esc(href)}" target="_blank" rel="noopener">
+          <div class="fc-body">
+            <div class="nc-top">
+              <span class="nc-source">${esc(a.source)}</span>
+              <span class="nc-tag ${sent}">${label}</span>
+              <span class="fc-badge">Featured</span>
+            </div>
+            <div class="nc-title">${esc(a.headline)}</div>
+            <div class="nc-desc">${esc(a.summary)}</div>
+            <div class="nc-footer">
+              <span class="nc-time">${a.timeAgo || ''}</span>
+              <span class="nc-arrow">→</span>
+            </div>
+          </div>
+        </a>`;
+    }
+
+    return `
+      <a class="news-card ${sent}" href="${esc(href)}" target="_blank" rel="noopener">
+        <div class="nc-top">
+          <span class="nc-source">${esc(a.source)}</span>
+          <span class="nc-tag ${sent}">${label}</span>
+        </div>
+        <div class="nc-title">${esc(a.headline)}</div>
+        <div class="nc-desc">${esc(a.summary)}</div>
+        <div class="nc-footer">
+          <span class="nc-time">${a.timeAgo || ''}</span>
+          <span class="nc-arrow">→</span>
+        </div>
+      </a>`;
+  }).join('');
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Fallback articles ─────────────────────────────────── */
+const now = Date.now() / 1000;
+const FALLBACK_NEWS = [
+  { headline:'SEBI tightens F&O rules; new margin norms protect retail investors', source:'Economic Times', datetime:now-3600, summary:'Market regulator SEBI introduced stricter futures & options margin requirements to curb excessive speculation by retail traders and reduce systemic risk.', url:'#', sentiment:'neutral', category:'india', timeAgo:'1h ago' },
+  { headline:'RBI holds repo rate at 6.25%; MPC flags global headwinds', source:'Business Standard', datetime:now-7200, summary:'The Monetary Policy Committee voted unanimously to keep rates unchanged while monitoring global crude oil prices and US Federal Reserve signals for direction.', url:'#', sentiment:'neutral', category:'india', timeAgo:'2h ago' },
+  { headline:'Nifty 50 rallies 1.4% on strong FII inflows; banking stocks lead', source:'Mint', datetime:now-10800, summary:'Foreign institutional investors pumped ₹4,200 Cr into Indian equities as global risk appetite improved and dollar index softened.', url:'#', sentiment:'bull', category:'india', timeAgo:'3h ago' },
+  { headline:'HDFC Bank Q3 FY26 beats estimates; NIM stable at 3.5%', source:'Reuters India', datetime:now-14400, summary:"India's largest private sector bank reported 19% YoY rise in net profit driven by loan growth and stable asset quality across retail and corporate segments.", url:'#', sentiment:'bull', category:'india', timeAgo:'4h ago' },
+  { headline:'TCS secures $1.5B digital transformation deal from European bank', source:'NDTV Profit', datetime:now-18000, summary:'Tata Consultancy Services won its largest European banking mandate, strengthening its BFSI vertical and deal pipeline heading into FY27.', url:'#', sentiment:'bull', category:'india', timeAgo:'5h ago' },
+  { headline:'Reliance to invest ₹75,000 Cr in green energy over 3 years', source:'Bloomberg India', datetime:now-21600, summary:'The conglomerate announced a capital expenditure roadmap for solar, wind, and green hydrogen infrastructure, targeting 20GW capacity by 2028.', url:'#', sentiment:'bull', category:'india', timeAgo:'6h ago' },
+  { headline:'Bajaj Finance raises FD rates; AUM grows 28% YoY in Q2', source:'Moneycontrol', datetime:now-25200, summary:'The leading NBFC increased fixed deposit rates by 25 basis points across tenors, signalling confidence in liability management amid competitive pressure.', url:'#', sentiment:'bull', category:'india', timeAgo:'7h ago' },
+  { headline:'India GDP growth forecast raised to 7.2% for FY26 by IMF', source:'IMF', datetime:now-28800, summary:'The International Monetary Fund upgraded India projections citing resilient domestic consumption, strong services exports, and improving infrastructure investment.', url:'#', sentiment:'bull', category:'economy', timeAgo:'8h ago' },
+  { headline:'US Federal Reserve signals two rate cuts in 2026', source:'Reuters', datetime:now-32400, summary:'Fed Chair Jerome Powell indicated confidence in the disinflation trajectory, opening the door for policy easing in H1 2026 subject to labour market conditions.', url:'#', sentiment:'bull', category:'economy', timeAgo:'9h ago' },
+  { headline:'India CPI inflation eases to 4.8% in November', source:'MoSPI', datetime:now-36000, summary:'Consumer price inflation declined from 5.2% in October driven by falling vegetable and edible oil prices across major metropolitan areas.', url:'#', sentiment:'bull', category:'economy', timeAgo:'10h ago' },
+  { headline:'Crude oil falls 3% as OPEC+ raises output; IEA cuts demand forecast', source:'Financial Times', datetime:now-39600, summary:'Oil markets faced selling pressure after the OPEC+ alliance agreed to gradually unwind production cuts, adding about 300,000 bpd starting February 2026.', url:'#', sentiment:'bear', category:'economy', timeAgo:'11h ago' },
+  { headline:'World Bank raises India growth to 6.9% on infrastructure momentum', source:'World Bank', datetime:now-43200, summary:'Record public capex in roads, railways, and ports is expected to crowd in private investment and sustain growth above the 6.5% medium-term baseline.', url:'#', sentiment:'bull', category:'economy', timeAgo:'12h ago' },
+];
+
+window.addEventListener('DOMContentLoaded', () => loadNews('india'));
+</script>
+</body>
+</html>

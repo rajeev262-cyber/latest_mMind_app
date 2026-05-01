@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MarketMind — Stock Search</title>
+  <link rel="stylesheet" href="global.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    .app-layout { flex-direction: column; height: auto; overflow: visible; }
+
+    /* Navbar */
+    .topnav { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; height: 58px; background: rgba(5,16,31,.9); border-bottom: 1px solid var(--border); backdrop-filter: blur(18px); }
+    .topnav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .topnav-logo-text { font-size: 1.1rem; font-weight: 700; color: #fff; letter-spacing: -.02em; font-family: var(--font-ui); }
+    .topnav-logo-text em { font-style: normal; color: var(--blue); }
+    .topnav-links { display: flex; gap: 4px; }
+    .topnav-link { padding: 6px 14px; border-radius: var(--r-sm); font-size: 13px; color: var(--muted); text-decoration: none; font-family: var(--font-ui); transition: color var(--ease), background var(--ease); }
+    .topnav-link:hover { color: var(--text); background: rgba(255,255,255,.05); }
+    .topnav-link.active { color: #fff; background: rgba(56,189,248,.1); }
+    .topnav-user { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-dim); font-family: var(--font-ui); }
+    .nav-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+    /* Hero */
+    .hero { padding: 72px 24px 48px; text-align: center; position: relative; }
+    .hero-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 14px; background: rgba(56,189,248,.08); border: 1px solid rgba(56,189,248,.2); border-radius: 99px; font-size: .75rem; font-weight: 600; color: var(--blue); font-family: var(--font-ui); margin-bottom: 20px; }
+    .hero h1 { font-size: clamp(1.9rem, 5vw, 3rem); font-weight: 700; color: #fff; line-height: 1.2; margin-bottom: 12px; }
+    .hero p { font-size: .98rem; color: var(--muted); max-width: 520px; margin: 0 auto 32px; font-style: italic; }
+
+    /* Search box */
+    .search-box {
+      position: relative; max-width: 660px; margin: 0 auto;
+      display: flex; align-items: center;
+      background: var(--surface); border: 1px solid var(--border-h);
+      border-radius: 50px; padding: 6px 6px 6px 20px;
+      box-shadow: 0 0 40px rgba(56,189,248,.1);
+      transition: border-color var(--ease), box-shadow var(--ease);
+    }
+    .search-box:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(56,189,248,.12), 0 0 40px rgba(56,189,248,.15); }
+    .search-icon-wrap { color: var(--muted); margin-right: 12px; flex-shrink: 0; }
+    .search-input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-family: var(--font-serif); font-size: .97rem; min-width: 0; }
+    .search-input::placeholder { color: var(--muted); font-style: italic; }
+    .btn-analyse { background: var(--btn-grad); border: none; border-radius: 50px; padding: 11px 26px; color: #fff; font-family: var(--font-ui); font-size: .9rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 7px; flex-shrink: 0; transition: opacity .2s, transform .15s; }
+    .btn-analyse:hover { opacity: .88; transform: scale(1.02); }
+    .btn-analyse:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* Dropdown */
+    .dropdown { position: absolute; top: calc(100% + 8px); left: 0; right: 0; background: var(--surface); border: 1px solid var(--border-h); border-radius: var(--r); overflow: hidden; box-shadow: 0 16px 48px rgba(0,0,0,.4); list-style: none; z-index: 100; }
+    .dd-item { display: flex; align-items: center; justify-content: space-between; padding: 11px 16px; cursor: pointer; transition: background var(--ease); border-bottom: 1px solid var(--border); }
+    .dd-item:last-child { border-bottom: none; }
+    .dd-item:hover { background: var(--surface2); }
+    .dd-ticker { font-size: 13px; font-weight: 700; color: var(--text); font-family: var(--font-ui); }
+    .dd-name   { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+    .dd-tag    { font-size: .65rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; font-family: var(--font-ui); }
+    .dd-tag.bull { background: rgba(74,222,128,.12); color: var(--green); }
+    .dd-tag.bear { background: rgba(248,113,113,.12); color: var(--red); }
+    .dd-tag.hold { background: rgba(56,189,248,.12);  color: var(--blue); }
+
+    /* Recommendations grid */
+    .reco-section { padding: 0 24px 60px; max-width: 1200px; margin: 0 auto; width: 100%; }
+    .reco-header  { margin-bottom: 20px; }
+    .section-badge { display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--blue); font-family: var(--font-ui); margin-bottom: 6px; }
+    .section-title { font-size: clamp(1.3rem, 3vw, 1.8rem); font-weight: 700; color: #fff; }
+
+    .reco-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+
+    .reco-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 18px;
+      display: flex; flex-direction: column; gap: 10px;
+      cursor: pointer; transition: background var(--ease), border-color var(--ease), transform var(--ease);
+      animation: fadeUp .4s ease both;
+    }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+    .reco-card:hover { background: var(--surface2); border-color: var(--border-h); transform: translateY(-3px); }
+    .reco-card.bull { border-top: 2px solid var(--green); }
+    .reco-card.bear { border-top: 2px solid var(--red);   }
+    .reco-card.hold { border-top: 2px solid var(--blue);  }
+
+    .rc-head { display: flex; align-items: flex-start; justify-content: space-between; }
+    .rc-ticker { font-size: 1rem; font-weight: 700; color: var(--text); font-family: var(--font-ui); }
+    .rc-name   { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .rc-badge  { font-size: .65rem; font-weight: 700; padding: 3px 9px; border-radius: 99px; font-family: var(--font-ui); }
+    .rc-badge.bull { background: rgba(74,222,128,.12); color: var(--green); }
+    .rc-badge.bear { background: rgba(248,113,113,.12); color: var(--red); }
+    .rc-badge.hold { background: rgba(56,189,248,.12);  color: var(--blue); }
+
+    .rc-price  { font-size: 1.25rem; font-weight: 700; color: var(--text); font-family: var(--font-ui); }
+    .rc-change { font-size: .8rem; font-weight: 500; }
+    .rc-change.up   { color: var(--green); }
+    .rc-change.down { color: var(--red); }
+    .rc-change.flat { color: var(--amber); }
+
+    .rc-score-wrap { display: flex; flex-direction: column; gap: 4px; }
+    .rc-score-lbl  { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted); font-family: var(--font-ui); }
+    .rc-bar-track  { height: 4px; background: rgba(255,255,255,.06); border-radius: 99px; overflow: hidden; }
+    .rc-bar-fill   { height: 100%; border-radius: 99px; background: var(--grad); transition: width .6s ease; }
+
+    .rc-insight { font-size: 12px; color: var(--text-dim); line-height: 1.55; font-style: italic; }
+    .rc-btn {
+      margin-top: auto; padding: 8px 14px; border-radius: var(--r-sm);
+      background: rgba(56,189,248,.08); border: 1px solid rgba(56,189,248,.15);
+      color: var(--blue); font-size: 12px; font-family: var(--font-ui); font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; gap: 6px;
+      transition: background var(--ease), border-color var(--ease);
+    }
+    .rc-btn:hover { background: rgba(56,189,248,.15); border-color: rgba(56,189,248,.3); }
+
+    .loading-text { grid-column: 1/-1; text-align: center; padding: 48px; color: var(--muted); font-style: italic; }
+
+    @media (max-width: 700px) {
+      .topnav-links, .topnav-user { display: none; }
+      .topnav { padding: 0 14px; }
+      .hero { padding: 48px 16px 32px; }
+      .reco-section { padding: 0 14px 40px; }
+      .reco-grid { grid-template-columns: 1fr; }
+      .search-box { border-radius: var(--r); flex-wrap: wrap; }
+      .btn-analyse { width: 100%; justify-content: center; border-radius: var(--r-sm); }
+    }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <nav class="topnav">
+    <a href="introindex.html" class="topnav-logo">
+      <svg width="28" height="22" viewBox="0 0 60 40" fill="none">
+        <circle cx="28" cy="14" r="5" fill="#4ade80"/><circle cx="18" cy="26" r="4" fill="#38bdf8"/><circle cx="40" cy="20" r="4" fill="#818cf8"/>
+        <polyline points="18,26 28,14 40,20" stroke="url(#ng2)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <defs><linearGradient id="ng2" x1="18" y1="26" x2="40" y2="20" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#4ade80"/></linearGradient></defs>
+      </svg>
+      <span class="topnav-logo-text">Market<em>Mind</em></span>
+    </a>
+    <div class="topnav-links">
+      <a href="search.html"    class="topnav-link active">Search</a>
+      <a href="mainindex.html" class="topnav-link">Dashboard</a>
+      <a href="news.html"      class="topnav-link">News</a>
+      <a href="portfolio.html" class="topnav-link">Portfolio</a>
+    </div>
+    <div class="topnav-user"><div class="nav-dot"></div><span id="navUser">Analyst</span></div>
+  </nav>
+
+  <div class="main-content" style="overflow:visible; height:auto;">
+    <!-- Hero search -->
+    <section class="hero">
+      <div class="hero-badge">
+        <svg width="7" height="7" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#4ade80"/></svg>
+        AI Research Engine · NSE / BSE Stocks
+      </div>
+      <h1>What stock are you<br><span class="grad-text">researching today?</span></h1>
+      <p>Search any ticker or company — our AI analyses trend, risk, and signal instantly.</p>
+
+      <div class="search-box" id="searchBox">
+        <span class="search-icon-wrap">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </span>
+        <input class="search-input" type="text" id="searchInput" placeholder="RELIANCE, INFY, HDFCBANK…" autocomplete="off"/>
+        <button class="btn-analyse" id="analyseBtn">
+          Analyse
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+        <ul class="dropdown hidden" id="dropdown"></ul>
+      </div>
+    </section>
+
+    <!-- Recommendations -->
+    <section class="reco-section">
+      <div class="reco-header">
+        <div class="section-badge" id="recoLabel">AI Top Picks</div>
+        <h2 class="section-title" id="recoTitle">Today's <span class="grad-text">Recommendations</span></h2>
+      </div>
+      <div class="reco-grid" id="recoGrid">
+        <div class="loading-text">Loading AI recommendations…</div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+const API = window.location.hostname === 'localhost' 
+  ? 'http://localhost:5000/api' 
+  : 'https://marketmind-backend.onrender.com/api';
+document.getElementById('navUser').textContent = localStorage.getItem('mm_user') || 'Analyst';
+
+const STOCK_DB = [
+  {ticker:'RELIANCE',name:'Reliance Industries',sentiment:'bull',label:'BUY',dir:'up',price:'₹1,240',change:'+1.1%',score:84,insight:'Strong institutional buying; Jio + Retail segments driving revenue.'},
+  {ticker:'HDFCBANK',name:'HDFC Bank Ltd',sentiment:'bull',label:'BUY',dir:'up',price:'₹1,740',change:'+0.8%',score:89,insight:'Bull flag intact. NIM expansion supporting premium valuation.'},
+  {ticker:'INFY',name:'Infosys Ltd',sentiment:'bull',label:'BUY',dir:'up',price:'₹1,550',change:'+0.5%',score:78,insight:'Cup & handle forming. Deal win recovery driving optimism.'},
+  {ticker:'TCS',name:'Tata Consultancy',sentiment:'bull',label:'BUY',dir:'flat',price:'₹3,550',change:'0.0%',score:80,insight:'Stable deal pipeline. Defensive pick in volatile markets.'},
+  {ticker:'WIPRO',name:'Wipro Ltd',sentiment:'hold',label:'HOLD',dir:'flat',price:'₹258',change:'-0.2%',score:55,insight:'Consolidation zone. IT headwinds persist. Watch breakout.'},
+  {ticker:'ICICIBANK',name:'ICICI Bank',sentiment:'bull',label:'BUY',dir:'up',price:'₹1,230',change:'+1.4%',score:86,insight:'Strong loan growth + improving asset quality.'},
+  {ticker:'BAJFINANCE',name:'Bajaj Finance',sentiment:'bull',label:'BUY',dir:'up',price:'₹8,550',change:'+3.2%',score:82,insight:'Premium NBFC; AUM growth 28% YoY.'},
+  {ticker:'TITAN',name:'Titan Company',sentiment:'bull',label:'BUY',dir:'up',price:'₹3,280',change:'+1.8%',score:77,insight:'Jewelry demand strong; Tanishq gaining market share.'},
+  {ticker:'SBIN',name:'State Bank of India',sentiment:'bull',label:'BUY',dir:'up',price:'₹770',change:'+0.9%',score:74,insight:'Credit growth re-accelerating; NPA cycle improving.'},
+  {ticker:'YESBANK',name:'Yes Bank',sentiment:'bear',label:'SELL',dir:'down',price:'₹18.5',change:'-5.4%',score:25,insight:'High-risk speculative play; asset quality concerns linger.'},
+  {ticker:'SUZLON',name:'Suzlon Energy',sentiment:'bear',label:'SELL',dir:'down',price:'₹52',change:'-6.1%',score:28,insight:'High volatility; debt concerns remain despite order wins.'},
+  {ticker:'RPOWER',name:'Reliance Power',sentiment:'bear',label:'SELL',dir:'down',price:'₹22',change:'-4.7%',score:20,insight:'Sustained bearish pressure; avoid fresh positions.'},
+];
+
+let currentData = [...STOCK_DB];
+
+/* ── Autocomplete ─────────────────────────────────────── */
+const input    = document.getElementById('searchInput');
+const dropdown = document.getElementById('dropdown');
+
+input.addEventListener('input', () => {
+  const q = input.value.trim().toUpperCase();
+  if (!q) { dropdown.classList.add('hidden'); return; }
+  const hits = STOCK_DB.filter(s => s.ticker.includes(q) || s.name.toUpperCase().includes(q)).slice(0, 7);
+  if (!hits.length) { dropdown.classList.add('hidden'); return; }
+  dropdown.innerHTML = hits.map(s => `
+    <li class="dd-item" data-ticker="${s.ticker}">
+      <div><div class="dd-ticker">${s.ticker}</div><div class="dd-name">${s.name}</div></div>
+      <span class="dd-tag ${s.sentiment}">${s.label}</span>
+    </li>`).join('');
+  dropdown.classList.remove('hidden');
+  dropdown.querySelectorAll('.dd-item').forEach(li =>
+    li.addEventListener('mousedown', e => { e.preventDefault(); goToDashboard(li.dataset.ticker); })
+  );
+});
+input.addEventListener('blur', () => setTimeout(() => dropdown.classList.add('hidden'), 160));
+input.addEventListener('keydown', e => { if (e.key === 'Enter') { dropdown.classList.add('hidden'); goToDashboard(input.value.trim().toUpperCase()); } });
+document.getElementById('analyseBtn').addEventListener('click', () => goToDashboard(input.value.trim().toUpperCase()));
+
+/* ── NAVIGATE DIRECTLY TO DASHBOARD ──────────────────── */
+function goToDashboard(ticker) {
+  if (!ticker) return;
+  const valid = STOCK_DB.find(s => s.ticker === ticker.toUpperCase());
+  const target = valid ? ticker.toUpperCase() : 'RELIANCE';
+  sessionStorage.setItem('mm_ticker', target);
+  window.location.href = `mainindex.html?ticker=${target}`;
+}
+
+/* ── Render recommendation cards ──────────────────────── */
+async function loadRecos() {
+  try {
+    const r = await fetch(`${API}/stocks/search?q=`);
+    const d = await r.json();
+    if (d.ok && d.results.length) { currentData = d.results; renderCards(d.results); return; }
+  } catch {}
+  renderCards(STOCK_DB);
+}
+
+function renderCards(data) {
+  const grid = document.getElementById('recoGrid');
+  if (!data.length) { grid.innerHTML = '<div class="loading-text">No stocks found.</div>'; return; }
+  grid.innerHTML = data.map((s, i) => {
+    const dir    = s.dir || 'flat';
+    const arrow  = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '►';
+    const sent   = s.sentiment || 'hold';
+    const score  = s.score || 50;
+    return `
+    <div class="reco-card ${sent}" style="animation-delay:${i*.05}s" onclick="goToDashboard('${s.ticker}')">
+      <div class="rc-head">
+        <div><div class="rc-ticker">${s.ticker}</div><div class="rc-name">${s.name}</div></div>
+        <span class="rc-badge ${sent}">${s.label}</span>
+      </div>
+      <div class="rc-price">${s.price}</div>
+      <div class="rc-change ${dir}">${arrow} ${s.change}</div>
+      <div class="rc-score-wrap">
+        <div class="rc-score-lbl"><span>AI Score</span><span>${score}/100</span></div>
+        <div class="rc-bar-track"><div class="rc-bar-fill" style="width:${score}%"></div></div>
+      </div>
+      <div class="rc-insight">${s.insight}</div>
+      <button class="rc-btn" onclick="event.stopPropagation();goToDashboard('${s.ticker}')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Open Full Dashboard
+      </button>
+    </div>`;
+  }).join('');
+}
+
+window.addEventListener('DOMContentLoaded', loadRecos);
+</script>
+</body>
+</html>

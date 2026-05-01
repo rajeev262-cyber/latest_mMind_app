@@ -1,0 +1,186 @@
+/* =============================================
+   MarketMind — Intro Page Stylesheet
+   ============================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&display=swap');
+
+/* ---------- CSS Variables ---------- */
+:root {
+  --bg-dark:      #060e1e;
+  --bg-mid:       #0b1a30;
+  --bg-panel:     #0d2040;
+  --accent-blue:  #38b6ff;
+  --accent-green: #3ecf72;
+  --accent-violet:#7c5cfc;
+  --text-primary: #e8edf5;
+  --text-sub:     #a8bcd4;
+  --candle-up:    rgba(62,207,114,0.25);
+  --candle-down:  rgba(90,143,255,0.20);
+  --glow-blue:    rgba(56,182,255,0.35);
+  --glow-green:   rgba(62,207,114,0.30);
+}
+
+/* ---------- Reset & Base ---------- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  font-family: 'Sora', sans-serif;
+  background: var(--bg-dark);
+  color: var(--text-primary);
+}
+
+/* ---------- Canvas Background ---------- */
+#bgCanvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ---------- Network Overlay ---------- */
+.network-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 110%, rgba(56,182,255,0.06) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 80% 80%, rgba(62,207,114,0.05) 0%, transparent 60%);
+}
+
+/* ---------- Hero Wrapper ---------- */
+.hero {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 0 24px;
+
+  /* Subtle radial spotlight at center */
+  background: radial-gradient(
+    ellipse 65% 55% at 50% 52%,
+    rgba(10, 28, 55, 0.75) 0%,
+    transparent 80%
+  );
+}
+
+/* ---------- Brand Row ---------- */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  opacity: 0;
+  transform: translateY(-22px);
+  animation: fadeUp 0.9s cubic-bezier(0.22,1,0.36,1) 0.2s forwards;
+}
+
+.logo-icon {
+  width: 120px;
+  height: 100px;
+  filter: drop-shadow(0 0 14px rgba(56,182,255,0.45))
+          drop-shadow(0 0 28px rgba(62,207,114,0.25));
+}
+
+/* ---------- Wordmark ---------- */
+.wordmark {
+  font-size: clamp(2.6rem, 7vw, 5.4rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.word-market {
+  color: var(--text-primary);
+}
+
+.word-mind {
+  background: linear-gradient(100deg, var(--accent-blue) 0%, var(--accent-green) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ---------- Tagline ---------- */
+.tagline {
+  font-size: clamp(1rem, 2.4vw, 1.45rem);
+  font-weight: 300;
+  color: var(--text-sub);
+  letter-spacing: 0.01em;
+  text-align: center;
+  max-width: 560px;
+  opacity: 0;
+  transform: translateY(-16px);
+  animation: fadeUp 0.9s cubic-bezier(0.22,1,0.36,1) 0.45s forwards;
+}
+
+/* ---------- CTA Button ---------- */
+.cta-btn {
+  position: relative;
+  margin-top: 10px;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  border-radius: 50px;
+  background: none;
+  outline: none;
+  opacity: 0;
+  transform: translateY(-12px) scale(0.97);
+  animation: fadeUp 0.9s cubic-bezier(0.22,1,0.36,1) 0.68s forwards;
+}
+
+.cta-btn span {
+  display: block;
+  padding: 17px 72px;
+  border-radius: 50px;
+  font-family: 'Sora', sans-serif;
+  font-size: clamp(1rem, 1.8vw, 1.15rem);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: linear-gradient(100deg, var(--accent-blue) 0%, var(--accent-green) 100%);
+  transition: filter 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+  box-shadow:
+    0 0 28px rgba(56,182,255,0.30),
+    0 0 56px rgba(62,207,114,0.18),
+    inset 0 1px 0 rgba(255,255,255,0.18);
+}
+
+.cta-btn:hover span {
+  filter: brightness(1.12) saturate(1.1);
+  transform: scale(1.03);
+  box-shadow:
+    0 0 40px rgba(56,182,255,0.50),
+    0 0 80px rgba(62,207,114,0.28),
+    inset 0 1px 0 rgba(255,255,255,0.22);
+}
+
+.cta-btn:active span {
+  transform: scale(0.98);
+  filter: brightness(0.96);
+}
+
+/* ---------- Keyframes ---------- */
+@keyframes fadeUp {
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 520px) {
+  .brand { gap: 14px; }
+  .logo-icon { width: 64px; height: 50px; }
+  .tagline { font-size: 0.95rem; }
+  .cta-btn span { padding: 15px 52px; }
+}

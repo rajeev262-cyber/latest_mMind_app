@@ -309,9 +309,7 @@
 </div>
 
 <script>
-const API = window.location.hostname === 'localhost' 
-  ? 'http://localhost:5000/api' 
-  : 'https://marketmind-backend.onrender.com/api';
+const API = 'https://marketmind-backend-w8gx.onrender.com/api';
 
 /* ── Auth guard ──────────────────────────────────────────── */
 const user = localStorage.getItem('loggedInUser') || localStorage.getItem('mm_user') || 'Analyst';

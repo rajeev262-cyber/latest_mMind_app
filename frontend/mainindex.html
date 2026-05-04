@@ -357,13 +357,24 @@ if (hamburgerEl && sidebar && overlay) {
 const stored = sessionStorage.getItem('mm_ticker');
 if (stored) {
   const sel = document.getElementById('stockSel');
-  if ([...sel.options].some(o => o.value === stored)) sel.value = stored;
+  if (sel && [...sel.options].some(o => o.value === stored)) sel.value = stored;
 }
 
 /* ── Chart ─────────────────────────────────────────────── */
 let chart = null;
 function buildChart(labels, closes, pred) {
-  const ctx = document.getElementById('myChart').getContext('2d');
+  const canvasEl = document.getElementById('myChart');
+  if (!canvasEl) {
+    console.warn('Chart canvas not found');
+    return;
+  }
+  
+  const ctx = canvasEl.getContext('2d');
+  if (!ctx) {
+    console.warn('Could not get chart context');
+    return;
+  }
+  
   if (chart) { chart.destroy(); chart = null; }
   chart = new Chart(ctx, {
     type: 'line',
@@ -394,21 +405,36 @@ function buildChart(labels, closes, pred) {
 function setCards(d) {
   /* Trend icon */
   const ti = document.getElementById('trendIcon');
-  if (d.trend_dir==='up')   ti.innerHTML = `<svg width="52" height="48" viewBox="0 0 62 60"><polygon points="31,6 56,52 6,52" fill="#166534" opacity=".7"/><polygon points="31,18 50,52 12,52" fill="#4ade80" opacity=".9"/></svg>`;
-  else if (d.trend_dir==='side') ti.innerHTML = `<svg width="60" height="32" viewBox="0 0 68 38"><line x1="6" y1="19" x2="54" y2="19" stroke="#fbbf24" stroke-width="6" stroke-linecap="round"/><polygon points="62,19 48,10 48,28" fill="#fbbf24"/></svg>`;
-  else ti.innerHTML = `<svg width="52" height="48" viewBox="0 0 62 60"><polygon points="31,54 56,8 6,8" fill="#7f1d1d" opacity=".8"/><polygon points="31,42 50,8 12,8" fill="#f87171" opacity=".9"/></svg>`;
-  document.getElementById('trendLbl').textContent = d.trend;
+  if (ti) {
+    if (d.trend_dir==='up')   ti.innerHTML = `<svg width="52" height="48" viewBox="0 0 62 60"><polygon points="31,6 56,52 6,52" fill="#166534" opacity=".7"/><polygon points="31,18 50,52 12,52" fill="#4ade80" opacity=".9"/></svg>`;
+    else if (d.trend_dir==='side') ti.innerHTML = `<svg width="60" height="32" viewBox="0 0 68 38"><line x1="6" y1="19" x2="54" y2="19" stroke="#fbbf24" stroke-width="6" stroke-linecap="round"/><polygon points="62,19 48,10 48,28" fill="#fbbf24"/></svg>`;
+    else ti.innerHTML = `<svg width="52" height="48" viewBox="0 0 62 60"><polygon points="31,54 56,8 6,8" fill="#7f1d1d" opacity=".8"/><polygon points="31,42 50,8 12,8" fill="#f87171" opacity=".9"/></svg>`;
+  }
+  
+  const trendLblEl = document.getElementById('trendLbl');
+  if (trendLblEl) trendLblEl.textContent = d.trend || 'Sideways';
+  
   const tB = document.getElementById('trendBadge');
-  tB.textContent = (d.trend_badge||'').toUpperCase();
-  tB.className = 'mcard-badge' + (d.trend_dir==='down' ? ' bearish' : d.trend_dir==='side' ? ' neutral' : '');
+  if (tB) {
+    tB.textContent = (d.trend_badge||'').toUpperCase();
+    tB.className = 'mcard-badge' + (d.trend_dir==='down' ? ' bearish' : d.trend_dir==='side' ? ' neutral' : '');
+  }
 
   /* Risk */
   const rc = {low:'#4ade80', mid:'#fbbf24', high:'#f87171'}[d.risk_lv] || '#4a7090';
-  document.getElementById('riskIcon').innerHTML = `<svg width="52" height="46" viewBox="0 0 60 54"><polygon points="30,3 57,51 3,51" fill="${rc}" opacity=".85"/><text x="30" y="44" text-anchor="middle" font-size="26" font-weight="900" fill="#05101f" font-family="Arial,sans-serif">!</text></svg>`;
-  document.getElementById('riskLbl').textContent = d.risk;
+  const riskIconEl = document.getElementById('riskIcon');
+  if (riskIconEl) {
+    riskIconEl.innerHTML = `<svg width="52" height="46" viewBox="0 0 60 54"><polygon points="30,3 57,51 3,51" fill="${rc}" opacity=".85"/><text x="30" y="44" text-anchor="middle" font-size="26" font-weight="900" fill="#05101f" font-family="Arial,sans-serif">!</text></svg>`;
+  }
+  
+  const riskLblEl = document.getElementById('riskLbl');
+  if (riskLblEl) riskLblEl.textContent = d.risk || 'Medium Risk';
+  
   const rB = document.getElementById('riskBadge');
-  rB.textContent = d.risk_badge;
-  rB.className = 'mcard-badge risk-' + (d.risk_lv||'low');
+  if (rB) {
+    rB.textContent = d.risk_badge || 'MED';
+    rB.className = 'mcard-badge risk-' + (d.risk_lv||'low');
+  }
 
   /* AI Confidence — just the number */
   const confNumEl = document.getElementById('confNum');
@@ -440,14 +466,16 @@ function setCards(d) {
 
 /* ── Refresh dashboard ─────────────────────────────────── */
 async function refresh() {
-  const stockSelEl = document.getElementById('stockSel');
-  const rangeSelEl = document.getElementById('rangeSel');
-  const ticker = stockSelEl ? stockSelEl.value : 'RELIANCE';
-  const months = rangeSelEl ? parseInt(rangeSelEl.value) || 6 : 6;
+  try {
+    // Safe DOM access with fallbacks
+    const stockSelEl = document.getElementById('stockSel');
+    const rangeSelEl = document.getElementById('rangeSel');
+    const ticker = stockSelEl ? (stockSelEl.value || 'RELIANCE') : 'RELIANCE';
+    const months = rangeSelEl ? (parseInt(rangeSelEl.value) || 6) : 6;
 
-  // Set loading state
-  const anTextEl = document.getElementById('anText');
-  if (anTextEl) anTextEl.textContent = 'Analyzing...';
+    // Set loading state safely
+    const anTextEl = document.getElementById('anText');
+    if (anTextEl) anTextEl.textContent = 'Analyzing...';
 
   try {
     // Convert months to range format (6 -> 6m, 12 -> 1y, 36 -> 3y, 60 -> 5y)
@@ -534,6 +562,12 @@ async function refresh() {
   } catch (error) {
     console.error('API call failed:', error);
     useFallback(ticker, months);
+  }
+  } catch (outerError) {
+    console.error('Refresh function failed:', outerError);
+    // Ultimate fallback - show error message
+    const anTextEl = document.getElementById('anText');
+    if (anTextEl) anTextEl.textContent = 'Error loading data - please refresh page';
   }
   
   sessionStorage.setItem('mm_ticker', ticker);

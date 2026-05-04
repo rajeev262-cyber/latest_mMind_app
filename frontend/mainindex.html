@@ -314,17 +314,13 @@
 <script src="api-config.js"></script>
 <script>
 
-/* ── Global ticker declaration (backup for scope issues) ─────────── */
-const globalTicker = new URLSearchParams(window.location.search).get("ticker") || "TCS";
+/* ── GLOBAL TICKER STATE (SINGLE SOURCE OF TRUTH) ─────────────── */
+let CURRENT_TICKER = null;
 
-/* ── Dynamic ticker function ─────────────────────────────────── */
+/* ── GET TICKER FROM URL FIRST ───────────────────────────────── */
 function getTicker() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const urlTicker = urlParams.get("ticker");
-  const sessionTicker = sessionStorage.getItem("ticker");
-  const domTicker = document.getElementById('stockSel') ? document.getElementById('stockSel').value : null;
-  
-  return urlTicker || sessionTicker || domTicker || "TCS";
+    const params = new URLSearchParams(window.location.search);
+    return params.get("ticker") || "HDFCBANK";
 }
 
 /* ── Auth guard ──────────────────────────────────────────── */
@@ -366,27 +362,38 @@ if (hamburgerEl && sidebar && overlay) {
   });
 }
 
-/* ── Stock dropdown change listener ─────────────────────── */
-const stockSelEl = document.getElementById('stockSel');
-if (stockSelEl) {
-  stockSelEl.addEventListener('change', function () {
-    const newTicker = this.value;
-    console.log('Stock changed to:', newTicker);
-    sessionStorage.setItem("ticker", newTicker);
-    refresh();
-  });
-}
+/* ── INITIALIZE TICKER CORRECTLY ON PAGE LOAD ───────────────── */
+CURRENT_TICKER = getTicker();
 
-/* ── Pre-select ticker from sessionStorage ────────────── */
-const stored = sessionStorage.getItem('ticker');
-if (stored) {
-  const sel = document.getElementById('stockSel');
-  if (sel && [...sel.options].some(o => o.value === stored)) sel.value = stored;
-}
+document.getElementById("stockSel").value = CURRENT_TICKER;
+
+/* ── FIX DROPDOWN CHANGE (MOST IMPORTANT) ─────────────────── */
+document.getElementById("stockSel").addEventListener("change", (e) => {
+    const newTicker = e.target.value;
+
+    CURRENT_TICKER = newTicker;
+
+    // Update URL WITHOUT reload
+    window.history.replaceState({}, "", `?ticker=${newTicker}`);
+
+    // Save in session
+    sessionStorage.setItem("ticker", newTicker);
+
+    console.log("Ticker changed to:", newTicker);
+    console.log("CURRENT_TICKER:", CURRENT_TICKER);
+
+    // REFRESH FULL DASHBOARD
+    refresh();
+});
 
 /* ── Chart ─────────────────────────────────────────────── */
 let chart = null;
 function buildChart(labels, closes, pred) {
+  // FORCE GRAPH RESET
+  if (window.stockChart) {
+    window.stockChart.destroy();
+  }
+  
   const canvasEl = document.getElementById('myChart');
   if (!canvasEl) {
     console.warn('Chart canvas not found');
@@ -423,6 +430,9 @@ function buildChart(labels, closes, pred) {
       }
     }
   });
+  
+  // Store chart globally for reset
+  window.stockChart = chart;
 }
 
 /* ── Set metric cards ──────────────────────────────────── */
@@ -490,21 +500,16 @@ function setCards(d) {
 
 /* ── Refresh dashboard ─────────────────────────────────── */
 async function refresh() {
-  // Use dynamic ticker function
-  const ticker = getTicker();
+  // ONLY USE CURRENT_TICKER (SINGLE SOURCE OF TRUTH)
+  const ticker = CURRENT_TICKER;
   
   // Safe DOM access with fallbacks
   const rangeSelEl = document.getElementById('rangeSel');
   const months = rangeSelEl ? (parseInt(rangeSelEl.value) || 6) : 6;
 
-  // Update sessionStorage with current ticker
-  sessionStorage.setItem("ticker", ticker);
-
-  // Debug logging for ticker variable
-  console.log("Dynamic Ticker:", ticker);
-  console.log("URL Ticker:", new URLSearchParams(window.location.search).get("ticker"));
-  console.log("Session Ticker:", sessionStorage.getItem("ticker"));
-  console.log("DOM Ticker:", document.getElementById('stockSel') ? document.getElementById('stockSel').value : 'DOM element not found');
+  // ADD DEBUG LOGS
+  console.log("CURRENT_TICKER:", CURRENT_TICKER);
+  console.log("Using ticker:", ticker);
 
   // Validate ticker is defined
   if (!ticker) {
@@ -565,28 +570,20 @@ async function refresh() {
     
     // Update analysis sections with analysis API data
     if (analysisR && analysisR.ok) {
-      const marketAnalysisEl = document.getElementById("marketAnalysisText");
-      if (marketAnalysisEl) {
-        marketAnalysisEl.innerText = analysisR.analysis || 'Analysis data not available';
+      // FIX STATIC TEXT ISSUE
+      const analysisTextEl = document.getElementById("marketAnalysisText");
+      if (analysisTextEl) {
+        analysisTextEl.textContent = analysisR.analysis || 'Analysis data not available';
       }
       
-      const listEl = document.getElementById("aiReasoningList");
-      if (listEl) {
-        listEl.innerHTML = "";
-        
-        // Safe array access
+      const reasoningListEl = document.getElementById("aiReasoningList");
+      if (reasoningListEl) {
+        // FIX STATIC TEXT ISSUE
         const reasons = analysisR.reasoning || analysisR.reasons || [];
-        if (reasons.length > 0) {
-          reasons.forEach(item => {
-            const li = document.createElement("li");
-            li.innerText = typeof item === 'string' ? item : (item.text || 'Analysis point');
-            listEl.appendChild(li);
-          });
-        } else {
-          // Fallback if no reasons available
-          const fallbackLi = document.createElement("li");
-          fallbackLi.innerText = 'Analysis data being processed...';
-          listEl.appendChild(fallbackLi);
+        reasoningListEl.innerHTML = reasons.map(r => `<li>${typeof r === 'string' ? r : (r.text || 'Analysis point')}</li>`).join("");
+        
+        if (reasons.length === 0) {
+          reasoningListEl.innerHTML = '<li>Analysis data being processed...</li>';
         }
       }
     }

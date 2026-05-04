@@ -10,19 +10,19 @@ const API_CONFIG = {
   // API Endpoints
   ENDPOINTS: {
     AUTH: {
-      LOGIN: "/auth/login",
-      REGISTER: "/auth/register"
+      LOGIN: "/api/auth/login",
+      REGISTER: "/api/auth/register"
     },
     STOCKS: {
-      PREDICT: "/stocks/predict",
-      HISTORY: "/stocks/history",
-      ANALYSIS: "/stocks/analysis",
-      SEARCH: "/stocks/search",
-      PORTFOLIO: "/stocks/portfolio"
+      PREDICT: "/api/stocks/predict",
+      HISTORY: "/api/stocks/history",
+      ANALYSIS: "/api/stocks/analysis",
+      SEARCH: "/api/stocks/search",
+      PORTFOLIO: "/api/stocks/portfolio"
     },
     NEWS: {
-      FEED: "/news",
-      CATEGORIES: "/news/categories"
+      FEED: "/api/news",
+      CATEGORIES: "/api/news/categories"
     }
   },
   
@@ -46,6 +46,7 @@ const API_CONFIG = {
   
   // Enhanced fetch with error handling
   async fetchWithErrorHandling(url, options = {}) {
+    console.log("API URL:", url);
     try {
       const response = await fetch(url, {
         headers: this.getHeaders(),

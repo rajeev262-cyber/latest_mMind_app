@@ -324,10 +324,14 @@ document.getElementById('userAvatar').textContent = user.slice(0,2).toUpperCase(
 /* ── Stock Chart Function ───────────────────────────────────── */
 let stockChart;
 
-async function loadChart(ticker, range) {
+async function loadChart(ticker, months) {
   try {
+    // Convert months to range format (6 -> 6m, 12 -> 1y, 36 -> 3y, 60 -> 5y)
+    const rangeMap = {6: '6m', 12: '1y', 36: '3y', 60: '5y'};
+    const range = rangeMap[months] || '6m';
+    
     const data = await API_CONFIG.fetchWithErrorHandling(
-      API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.HISTORY + `?ticker=${ticker}&months=${range}`)
+      API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.HISTORY + `?ticker=${ticker}&range=${range}`)
     );
 
     if (data.ok && data.data) {
@@ -494,9 +498,13 @@ async function refresh() {
   document.getElementById('anText').textContent = 'Analyzing...';
 
   try {
+    // Convert months to range format (6 -> 6m, 12 -> 1y, 36 -> 3y, 60 -> 5y)
+    const rangeMap = {6: '6m', 12: '1y', 36: '3y', 60: '5y'};
+    const range = rangeMap[months] || '6m';
+    
     const [predR, histR] = await Promise.all([
       API_CONFIG.fetchWithErrorHandling(API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.PREDICT + `?ticker=${ticker}`)),
-      API_CONFIG.fetchWithErrorHandling(API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.ANALYSIS + `?ticker=${ticker}&months=${months}`))
+      API_CONFIG.fetchWithErrorHandling(API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.ANALYSIS + `?ticker=${ticker}&range=${range}`))
     ]);
     
     // Debug logging

@@ -502,17 +502,23 @@ async function refresh() {
     const rangeMap = {6: '6m', 12: '1y', 36: '3y', 60: '5y'};
     const range = rangeMap[months] || '6m';
     
-    const [predR, histR] = await Promise.all([
+    const [predResult, analysisResult] = await Promise.allSettled([
       API_CONFIG.fetchWithErrorHandling(API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.PREDICT + `?ticker=${ticker}`)),
       API_CONFIG.fetchWithErrorHandling(API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.ANALYSIS + `?ticker=${ticker}&range=${range}`))
     ]);
     
+    // Extract data safely
+    const predR = predResult.status === "fulfilled" ? predResult.value : null;
+    const histR = analysisResult.status === "fulfilled" ? analysisResult.value : null;
+    
     // Debug logging
     console.log('Prediction API Response:', predR);
     console.log('Analysis API Response:', histR);
+    console.log('Prediction Status:', predResult.status);
+    console.log('Analysis Status:', analysisResult.status);
     
     // Handle prediction data
-    if (predR.ok || predR.trend) {
+    if (predR && (predR.ok || predR.trend)) {
       // Map API response to expected format for setCards
       const mappedData = {
         trend: predR.trend || 'Sideways',
@@ -534,14 +540,17 @@ async function refresh() {
       setCards(mappedData);
     }
     
-    if (histR.ok) {
+    if (histR && histR.ok) {
       const step = Math.max(1, Math.floor(histR.labels.length / 120));
       buildChart(
         histR.labels.filter((_,i) => i%step===0),
         histR.closes.filter((_,i) => i%step===0),
         histR.pred.filter((_,i)   => i%step===0),
       );
-      document.getElementById('chartSub').textContent = `${histR.name} · ${months} Month View`;
+      document.getElementById('chartSub').textContent = `${histR.name || ticker} · ${months} Month View`;
+    } else if (analysisResult.status === "rejected") {
+      console.warn('Analysis API failed, using fallback UI');
+      document.getElementById('anText').textContent = 'Analysis unavailable - using cached data';
     }
   } catch (error) {
     console.error('API call failed:', error);

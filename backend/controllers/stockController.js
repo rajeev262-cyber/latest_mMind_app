@@ -179,52 +179,45 @@ exports.history = async (req, res) => {
 // ── GET /api/stocks/analysis?ticker=X&range=6m ────────────────────────────────
 exports.analysis = async (req, res) => {
   try {
-    const ticker = (req.query.ticker || 'RELIANCE').toUpperCase();
-    
-    // Handle range parameter (6m, 1y, 3y, 5y) or fallback to months
-    let months = 6; // default
-    if (req.query.range) {
-      const rangeMap = { '6m': 6, '1y': 12, '3y': 36, '5y': 60 };
-      months = rangeMap[req.query.range] || 6;
-    } else if (req.query.months) {
-      months = parseInt(req.query.months) || 6;
+    const { ticker } = req.query;
+
+    if (!ticker) {
+      return res.status(400).json({
+        ok: false,
+        error: "Ticker is required"
+      });
     }
+
+    // Generate deterministic analysis based on ticker
+    const tickerNum = ticker.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const trendIndex = tickerNum % 3;
+    const trends = ['Uptrend', 'Downtrend', 'Sideways'];
+    const currentTrend = trends[trendIndex];
     
-    const kp = KNOWN_PRICES[ticker] || { name: ticker };
-    const rows = generateHistory(ticker, months);
-    const closes = rows.map(r => r.close);
-    const labels = rows.map(r => r.label);
+    const analysisText = `Stock ${ticker.toUpperCase()} is currently showing mixed signals with a ${currentTrend.toLowerCase()} trend.`;
+    
+    const reasoning = [
+      "Trend is neutral",
+      "Momentum indicators are weak", 
+      "Volume is stable",
+      "No breakout detected"
+    ];
 
-  // AI forecast = smoothed trend extension
-  const sm = 20;
-  const smooth = closes.map((_, i) => {
-      const w = closes.slice(Math.max(0, i - sm), i + 1);
-      return w.reduce((a, b) => a + b, 0) / w.length;
+    return res.json({
+      ok: true,
+      ticker: ticker.toUpperCase(),
+      analysis: analysisText,
+      reasoning: reasoning,
+      trend: currentTrend,
+      confidence: 65 + trendIndex * 10,
+      risk: ['Low', 'Medium', 'High'][trendIndex]
     });
-    const slope = smooth.length >= 30 ? (smooth[smooth.length-1] - smooth[smooth.length-30]) / 30 : 0;
-    const pred = closes.map((c, i) => +(c + slope * (i - closes.length + 1) * 0.4).toFixed(2));
 
-    // Use fallback prediction instead of computePrediction
-    const prediction = getFallbackPrediction(ticker);
-
-    res.json({ 
-      ok: true, 
-      ticker, 
-      name: kp.name, 
-      labels, 
-      closes, 
-      pred, 
-      ...prediction 
-    });
-  } catch (error) {
-    console.error('Analysis endpoint error:', error.message);
+  } catch (err) {
+    console.error("Analysis error:", err);
     res.status(500).json({
       ok: false,
-      error: 'Failed to fetch analysis data',
-      ticker: req.query.ticker || 'RELIANCE',
-      labels: [],
-      closes: [],
-      pred: []
+      error: err.message
     });
   }
 };

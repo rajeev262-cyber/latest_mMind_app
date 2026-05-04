@@ -316,34 +316,42 @@
 
 /* ── Auth guard ──────────────────────────────────────────── */
 const user = localStorage.getItem('loggedInUser') || localStorage.getItem('mm_user') || 'Analyst';
-document.getElementById('sideUser').textContent = user;
-document.getElementById('userAvatar').textContent = user.slice(0,2).toUpperCase();
+const sideUserEl = document.getElementById('sideUser');
+const userAvatarEl = document.getElementById('userAvatar');
+if (sideUserEl) sideUserEl.textContent = user;
+if (userAvatarEl) userAvatarEl.textContent = user.slice(0,2).toUpperCase();
 
 
-document.getElementById('logoutBtn').addEventListener('click', e => {
-  e.preventDefault();
-  console.log('Logout clicked');
-  // Clear all authentication data
-  localStorage.removeItem('loggedInUser');
-  localStorage.removeItem('loggedInEmail');
-  localStorage.removeItem('mm_token');
-  localStorage.removeItem('mm_user');
-  localStorage.removeItem('mm_uname');
-  console.log('Logged out, redirecting to login');
-  window.location.href = 'login.html';
-});
+const logoutBtnEl = document.getElementById('logoutBtn');
+if (logoutBtnEl) {
+  logoutBtnEl.addEventListener('click', e => {
+    e.preventDefault();
+    console.log('Logout clicked');
+    // Clear all authentication data
+    localStorage.removeItem('loggedInUser');
+    localStorage.removeItem('loggedInEmail');
+    localStorage.removeItem('mm_token');
+    localStorage.removeItem('mm_user');
+    localStorage.removeItem('mm_uname');
+    console.log('Logged out, redirecting to login');
+    window.location.href = 'login.html';
+  });
+}
 
 /* ── Hamburger ─────────────────────────────────────────── */
 const sidebar  = document.getElementById('sidebar');
 const overlay  = document.getElementById('sidebarOverlay');
-document.getElementById('hamburger').addEventListener('click', () => {
-  sidebar.classList.toggle('open');
-  overlay.classList.toggle('hidden');
-});
-overlay.addEventListener('click', () => {
-  sidebar.classList.remove('open');
-  overlay.classList.add('hidden');
-});
+const hamburgerEl = document.getElementById('hamburger');
+if (hamburgerEl && sidebar && overlay) {
+  hamburgerEl.addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('hidden');
+  });
+  overlay.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    overlay.classList.add('hidden');
+  });
+}
 
 /* ── Pre-select ticker from sessionStorage ────────────── */
 const stored = sessionStorage.getItem('mm_ticker');
@@ -403,30 +411,43 @@ function setCards(d) {
   rB.className = 'mcard-badge risk-' + (d.risk_lv||'low');
 
   /* AI Confidence — just the number */
-  document.getElementById('confNum').textContent = d.confidence + '%';
-  document.getElementById('confLbl').textContent = d.conf_lbl || '';
-  document.getElementById('confBadge').textContent = d.conf_badge || '';
+  const confNumEl = document.getElementById('confNum');
+  const confLblEl = document.getElementById('confLbl');
+  const confBadgeEl = document.getElementById('confBadge');
+  if (confNumEl) confNumEl.textContent = (d.confidence || 50) + '%';
+  if (confLblEl) confLblEl.textContent = d.conf_lbl || '';
+  if (confBadgeEl) confBadgeEl.textContent = d.conf_badge || '';
 
   /* Signal bars */
   const bars = document.querySelectorAll('.signal-bars .bar');
-  const sc = d.signal >= 4 ? 'active' : d.signal >= 3 ? 'mid' : 'low';
-  bars.forEach((b,i) => { b.className = 'bar b'+(i+1); if(i < d.signal) b.classList.add(sc); });
-  document.getElementById('signalLbl').textContent = d.signal_lbl || '';
+  if (bars.length > 0) {
+    const sc = d.signal >= 4 ? 'active' : d.signal >= 3 ? 'mid' : 'low';
+    bars.forEach((b,i) => { b.className = 'bar b'+(i+1); if(i < d.signal) b.classList.add(sc); });
+  }
+  const signalLblEl = document.getElementById('signalLbl');
+  if (signalLblEl) signalLblEl.textContent = d.signal_lbl || '';
 
   /* Merged AI Reasoning + Analysis */
-  document.getElementById('rList').innerHTML = (d.reasons||[]).map(r =>
-    `<div class="r-row ${r.warn?'warn':''}"><div class="r-dot"></div><span>${r.text}</span></div>`
-  ).join('');
-  document.getElementById('anText').textContent = d.analysis || '';
+  const rListEl = document.getElementById('rList');
+  if (rListEl) {
+    rListEl.innerHTML = (d.reasons||[]).map(r =>
+      `<div class="r-row ${r.warn?'warn':''}"><div class="r-dot"></div><span>${r.text || 'Analysis point'}</span></div>`
+    ).join('');
+  }
+  const anTextEl = document.getElementById('anText');
+  if (anTextEl) anTextEl.textContent = d.analysis || 'No analysis available';
 }
 
 /* ── Refresh dashboard ─────────────────────────────────── */
 async function refresh() {
-  const ticker = document.getElementById('stockSel').value;
-  const months = parseInt(document.getElementById('rangeSel').value) || 6;
+  const stockSelEl = document.getElementById('stockSel');
+  const rangeSelEl = document.getElementById('rangeSel');
+  const ticker = stockSelEl ? stockSelEl.value : 'RELIANCE';
+  const months = rangeSelEl ? parseInt(rangeSelEl.value) || 6 : 6;
 
   // Set loading state
-  document.getElementById('anText').textContent = 'Analyzing...';
+  const anTextEl = document.getElementById('anText');
+  if (anTextEl) anTextEl.textContent = 'Analyzing...';
 
   try {
     // Convert months to range format (6 -> 6m, 12 -> 1y, 36 -> 3y, 60 -> 5y)
@@ -472,31 +493,43 @@ async function refresh() {
       
       // Update new analysis sections
       if (histR && histR.ok) {
-        document.getElementById("marketAnalysisText").innerText = histR.analysis || 'Analysis data not available';
+        const marketAnalysisEl = document.getElementById("marketAnalysisText");
+        if (marketAnalysisEl) {
+          marketAnalysisEl.innerText = histR.analysis || 'Analysis data not available';
+        }
         
-        const list = document.getElementById("aiReasoningList");
-        list.innerHTML = "";
-        
-        const reasons = histR.reasoning || histR.reasons || [{text: 'AI analysis completed'}];
-        reasons.forEach(item => {
-          const li = document.createElement("li");
-          li.innerText = typeof item === 'string' ? item : (item.text || 'Analysis point');
-          list.appendChild(li);
-        });
+        const listEl = document.getElementById("aiReasoningList");
+        if (listEl) {
+          listEl.innerHTML = "";
+          
+          const reasons = histR.reasoning || histR.reasons || [{text: 'AI analysis completed'}];
+          reasons.forEach(item => {
+            const li = document.createElement("li");
+            li.innerText = typeof item === 'string' ? item : (item.text || 'Analysis point');
+            listEl.appendChild(li);
+          });
+        }
       }
     }
     
-    if (histR && histR.ok) {
+    // Chart functionality removed - guard against undefined buildChart
+    if (typeof buildChart === 'function' && histR && histR.ok) {
       const step = Math.max(1, Math.floor(histR.labels.length / 120));
-      buildChart(
-        histR.labels.filter((_,i) => i%step===0),
-        histR.closes.filter((_,i) => i%step===0),
-        histR.pred.filter((_,i)   => i%step===0),
-      );
-      document.getElementById('chartSub').textContent = `${histR.name || ticker} · ${months} Month View`;
+      try {
+        buildChart(
+          histR.labels.filter((_,i) => i%step===0),
+          histR.closes.filter((_,i) => i%step===0),
+          histR.pred.filter((_,i)   => i%step===0),
+        );
+        const chartSubEl = document.getElementById('chartSub');
+        if (chartSubEl) chartSubEl.textContent = `${histR.name || ticker} · ${months} Month View`;
+      } catch (chartError) {
+        console.warn('Chart rendering failed:', chartError);
+      }
     } else if (analysisResult.status === "rejected") {
       console.warn('Analysis API failed, using fallback UI');
-      document.getElementById('anText').textContent = 'Analysis unavailable - using cached data';
+      const anTextEl = document.getElementById('anText');
+      if (anTextEl) anTextEl.textContent = 'Analysis unavailable - using cached data';
     }
   } catch (error) {
     console.error('API call failed:', error);
@@ -507,25 +540,51 @@ async function refresh() {
 }
 
 function useFallback(ticker, months) {
-  let seed = [...ticker].reduce((a,c)=>a+c.charCodeAt(0),0)*31337;
-  const R = () => { seed=(1664525*seed+1013904223)>>>0; return seed/0x100000000; };
-  const pts = months*15; let price = 800+R()*2000;
-  const closes=[], labels=[], now=new Date();
-  for(let i=0;i<pts;i++){
-    price=Math.max(5,price*(1+(R()-.46)*.025)); closes.push(+price.toFixed(2));
-    const d=new Date(now); d.setDate(now.getDate()-(pts-i)*2);
-    labels.push(i%(Math.floor(pts/6))===0?d.toLocaleString('default',{month:'short',year:'2-digit'}):'');
+  try {
+    let seed = [...ticker].reduce((a,c)=>a+c.charCodeAt(0),0)*31337;
+    const R = () => { seed=(1664525*seed+1013904223)>>>0; return seed/0x100000000; };
+    const pts = months*15; let price = 800+R()*2000;
+    const closes=[], labels=[], now=new Date();
+    for(let i=0;i<pts;i++){
+      price=Math.max(5,price*(1+(R()-.46)*.025)); closes.push(+price.toFixed(2));
+      const d=new Date(now); d.setDate(now.getDate()-(pts-i)*2);
+      labels.push(i%(Math.floor(pts/6))===0?d.toLocaleString('default',{month:'short',year:'2-digit'}):'');
+    }
+    const pred=closes.map((v,i,a)=>{const w=a.slice(Math.max(0,i-7),i+8);return+(w.reduce((s,x)=>s+x,0)/w.length).toFixed(2);});
+    
+    // Guard against undefined buildChart
+    if (typeof buildChart === 'function') {
+      buildChart(labels,closes,pred);
+    }
+    
+    const chartSubEl = document.getElementById('chartSub');
+    if (chartSubEl) chartSubEl.textContent=`${ticker} · ${months} Month View`;
+    
+    setCards({ 
+      trend:'Sideways',trend_dir:'side',trend_badge:'Neutral',
+      risk:'Medium Risk',risk_lv:'mid',risk_badge:'MED',
+      confidence:65,conf_lbl:'Moderate Confidence',conf_badge:'MED',
+      signal:3,signal_lbl:'Hold',
+      reasons:[{text:'Backend offline — using synthetic data',warn:true}],
+      analysis:'Start backend with: node server.js' 
+    });
+  } catch (error) {
+    console.error('Fallback function failed:', error);
+    // Even fallback can fail, so provide minimal UI updates
+    const anTextEl = document.getElementById('anText');
+    if (anTextEl) anTextEl.textContent = 'Unable to load data - please refresh';
   }
-  const pred=closes.map((v,i,a)=>{const w=a.slice(Math.max(0,i-7),i+8);return+(w.reduce((s,x)=>s+x,0)/w.length).toFixed(2);});
-  buildChart(labels,closes,pred);
-  document.getElementById('chartSub').textContent=`${ticker} · ${months} Month View`;
-  setCards({ trend:'Sideways',trend_dir:'side',trend_badge:'Neutral',risk:'Medium Risk',risk_lv:'mid',risk_badge:'MED',confidence:65,conf_lbl:'Moderate Confidence',conf_badge:'MED',signal:3,signal_lbl:'Hold',reasons:[{text:'Backend offline — using synthetic data',warn:true}],analysis:'Start backend with: node server.js' });
 }
 
 function runPredict() {
   const ov = document.getElementById('overlay');
-  ov.classList.add('show');
-  setTimeout(() => { ov.classList.remove('show'); refresh(); }, 900);
+  if (ov) {
+    ov.classList.add('show');
+    setTimeout(() => { 
+      ov.classList.remove('show'); 
+      refresh(); 
+    }, 900);
+  }
 }
 
 window.addEventListener('DOMContentLoaded', refresh);

@@ -187,7 +187,7 @@
           <label class="ctrl-lbl">Stock</label>
           <div class="sel-wrap">
             <svg class="sel-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            <select class="sel" id="stockSel" onchange="refresh()">
+            <select class="sel" id="stockSel">
               <option value="BAJFINANCE">Bajaj Finance</option>
               <option value="TITAN">Titan Company</option>
               <option value="POLYCAB">Polycab India</option>
@@ -317,6 +317,16 @@
 /* ── Global ticker declaration (backup for scope issues) ─────────── */
 const globalTicker = new URLSearchParams(window.location.search).get("ticker") || "TCS";
 
+/* ── Dynamic ticker function ─────────────────────────────────── */
+function getTicker() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlTicker = urlParams.get("ticker");
+  const sessionTicker = sessionStorage.getItem("ticker");
+  const domTicker = document.getElementById('stockSel') ? document.getElementById('stockSel').value : null;
+  
+  return urlTicker || sessionTicker || domTicker || "TCS";
+}
+
 /* ── Auth guard ──────────────────────────────────────────── */
 const user = localStorage.getItem('loggedInUser') || localStorage.getItem('mm_user') || 'Analyst';
 const sideUserEl = document.getElementById('sideUser');
@@ -356,8 +366,19 @@ if (hamburgerEl && sidebar && overlay) {
   });
 }
 
+/* ── Stock dropdown change listener ─────────────────────── */
+const stockSelEl = document.getElementById('stockSel');
+if (stockSelEl) {
+  stockSelEl.addEventListener('change', function () {
+    const newTicker = this.value;
+    console.log('Stock changed to:', newTicker);
+    sessionStorage.setItem("ticker", newTicker);
+    refresh();
+  });
+}
+
 /* ── Pre-select ticker from sessionStorage ────────────── */
-const stored = sessionStorage.getItem('mm_ticker');
+const stored = sessionStorage.getItem('ticker');
 if (stored) {
   const sel = document.getElementById('stockSel');
   if (sel && [...sel.options].some(o => o.value === stored)) sel.value = stored;
@@ -469,27 +490,25 @@ function setCards(d) {
 
 /* ── Refresh dashboard ─────────────────────────────────── */
 async function refresh() {
-  // Move ticker declaration to top of function - outside any blocks
-  const urlParams = new URLSearchParams(window.location.search);
-  const urlTicker = urlParams.get("ticker");
+  // Use dynamic ticker function
+  const ticker = getTicker();
   
   // Safe DOM access with fallbacks
-  const stockSelEl = document.getElementById('stockSel');
   const rangeSelEl = document.getElementById('rangeSel');
-  const ticker = urlTicker || (stockSelEl ? (stockSelEl.value || 'RELIANCE') : 'RELIANCE');
   const months = rangeSelEl ? (parseInt(rangeSelEl.value) || 6) : 6;
 
-  // Debug logging for ticker variable
-  console.log("Ticker:", ticker);
-  console.log("URL Ticker:", urlTicker);
-  console.log("DOM Ticker:", stockSelEl ? stockSelEl.value : 'DOM element not found');
-  console.log("Global Ticker:", globalTicker);
+  // Update sessionStorage with current ticker
+  sessionStorage.setItem("ticker", ticker);
 
-  // Validate ticker is defined with global fallback
+  // Debug logging for ticker variable
+  console.log("Dynamic Ticker:", ticker);
+  console.log("URL Ticker:", new URLSearchParams(window.location.search).get("ticker"));
+  console.log("Session Ticker:", sessionStorage.getItem("ticker"));
+  console.log("DOM Ticker:", document.getElementById('stockSel') ? document.getElementById('stockSel').value : 'DOM element not found');
+
+  // Validate ticker is defined
   if (!ticker) {
-    console.warn("Local ticker undefined, using global ticker:", globalTicker);
-    // Use global ticker as fallback
-    const fallbackTicker = globalTicker;
+    console.error("Ticker is undefined - this should never happen");
     return; // Exit early if ticker is somehow undefined
   }
 

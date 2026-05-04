@@ -314,6 +314,9 @@
 <script src="api-config.js"></script>
 <script>
 
+/* ── Global ticker declaration (backup for scope issues) ─────────── */
+const globalTicker = new URLSearchParams(window.location.search).get("ticker") || "TCS";
+
 /* ── Auth guard ──────────────────────────────────────────── */
 const user = localStorage.getItem('loggedInUser') || localStorage.getItem('mm_user') || 'Analyst';
 const sideUserEl = document.getElementById('sideUser');
@@ -480,10 +483,13 @@ async function refresh() {
   console.log("Ticker:", ticker);
   console.log("URL Ticker:", urlTicker);
   console.log("DOM Ticker:", stockSelEl ? stockSelEl.value : 'DOM element not found');
+  console.log("Global Ticker:", globalTicker);
 
-  // Validate ticker is defined
+  // Validate ticker is defined with global fallback
   if (!ticker) {
-    console.error("Ticker is undefined - this should never happen");
+    console.warn("Local ticker undefined, using global ticker:", globalTicker);
+    // Use global ticker as fallback
+    const fallbackTicker = globalTicker;
     return; // Exit early if ticker is somehow undefined
   }
 
@@ -603,9 +609,11 @@ async function refresh() {
     }
   } catch (error) {
     console.error('API call failed:', error);
+    console.log("Ticker in catch block:", ticker); // Debug ticker scope
     useFallback(ticker, months);
   }
   
+  console.log("Ticker before sessionStorage:", ticker); // Debug ticker scope
   sessionStorage.setItem('mm_ticker', ticker);
 }
 

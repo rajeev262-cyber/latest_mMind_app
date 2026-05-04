@@ -477,11 +477,15 @@ async function refresh() {
     const ticker = urlTicker || (stockSelEl ? (stockSelEl.value || 'RELIANCE') : 'RELIANCE');
     const months = rangeSelEl ? (parseInt(rangeSelEl.value) || 6) : 6;
 
+    // Debug logging for ticker variable
+    console.log("Ticker:", ticker);
+    console.log("URL Ticker:", urlTicker);
+    console.log("DOM Ticker:", stockSelEl ? stockSelEl.value : 'DOM element not found');
+
     // Set loading state safely
     const anTextEl = document.getElementById('anText');
     if (anTextEl) anTextEl.textContent = 'Analyzing...';
 
-  try {
     // Convert months to range format (6 -> 6m, 12 -> 1y, 36 -> 3y, 60 -> 5y)
     const rangeMap = {6: '6m', 12: '1y', 36: '3y', 60: '5y'};
     const range = rangeMap[months] || '6m';
@@ -594,12 +598,6 @@ async function refresh() {
   } catch (error) {
     console.error('API call failed:', error);
     useFallback(ticker, months);
-  }
-  } catch (outerError) {
-    console.error('Refresh function failed:', outerError);
-    // Ultimate fallback - show error message
-    const anTextEl = document.getElementById('anText');
-    if (anTextEl) anTextEl.textContent = 'Error loading data - please refresh page';
   }
   
   sessionStorage.setItem('mm_ticker', ticker);

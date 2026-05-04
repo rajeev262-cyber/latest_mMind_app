@@ -467,10 +467,14 @@ function setCards(d) {
 /* ── Refresh dashboard ─────────────────────────────────── */
 async function refresh() {
   try {
+    // Safe ticker initialization with multiple fallbacks
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlTicker = urlParams.get("ticker");
+    
     // Safe DOM access with fallbacks
     const stockSelEl = document.getElementById('stockSel');
     const rangeSelEl = document.getElementById('rangeSel');
-    const ticker = stockSelEl ? (stockSelEl.value || 'RELIANCE') : 'RELIANCE';
+    const ticker = urlTicker || (stockSelEl ? (stockSelEl.value || 'RELIANCE') : 'RELIANCE');
     const months = rangeSelEl ? (parseInt(rangeSelEl.value) || 6) : 6;
 
     // Set loading state safely
@@ -499,27 +503,40 @@ async function refresh() {
     
     // Handle prediction data
     if (predR && (predR.ok || predR.trend)) {
+      // Safe array access with fallbacks
+      const predReasons = predR.reasons || [];
+      const histReasons = (histR && histR.reasoning) || (histR && histR.reasons) || [];
+      
+      // Merge API responses safely
+      const mergedData = {
+        ...predR,
+        ...histR,
+        // Ensure arrays are always defined
+        reasons: predReasons.length > 0 ? predReasons : histReasons,
+        reasoning: histReasons.length > 0 ? histReasons : predReasons
+      };
+      
       // Map API response to expected format for setCards
       const mappedData = {
-        trend: predR.trend || 'Sideways',
-        trend_dir: predR.trend_dir || 'side',
-        trend_badge: predR.trend_badge || 'NEUTRAL',
-        risk: predR.risk || 'Medium Risk',
-        risk_lv: predR.risk_lv || 'mid',
-        risk_badge: predR.risk_badge || 'MED',
-        confidence: predR.confidence || 50,
-        conf_lbl: predR.conf_lbl || 'Moderate Confidence',
-        conf_badge: predR.conf_badge || 'MED',
-        signal: predR.signal || 3,
-        signal_lbl: predR.signal_lbl || 'Hold',
-        reasons: predR.reasons || [{text: 'AI analysis completed', warn: false}],
-        analysis: predR.analysis || predR.reason || 'Analysis completed successfully'
+        trend: mergedData.trend || 'Sideways',
+        trend_dir: mergedData.trend_dir || 'side',
+        trend_badge: mergedData.trend_badge || 'NEUTRAL',
+        risk: mergedData.risk || 'Medium Risk',
+        risk_lv: mergedData.risk_lv || 'mid',
+        risk_badge: mergedData.risk_badge || 'MED',
+        confidence: mergedData.confidence || 50,
+        conf_lbl: mergedData.conf_lbl || 'Moderate Confidence',
+        conf_badge: mergedData.conf_badge || 'MED',
+        signal: mergedData.signal || 3,
+        signal_lbl: mergedData.signal_lbl || 'Hold',
+        reasons: mergedData.reasons || [{text: 'AI analysis completed', warn: false}],
+        analysis: mergedData.analysis || mergedData.reason || 'Analysis completed successfully'
       };
       
       console.log('Mapped data for UI:', mappedData);
       setCards(mappedData);
       
-      // Update new analysis sections
+      // Update new analysis sections with safe data access
       if (histR && histR.ok) {
         const marketAnalysisEl = document.getElementById("marketAnalysisText");
         if (marketAnalysisEl) {
@@ -530,29 +547,44 @@ async function refresh() {
         if (listEl) {
           listEl.innerHTML = "";
           
-          const reasons = histR.reasoning || histR.reasons || [{text: 'AI analysis completed'}];
-          reasons.forEach(item => {
-            const li = document.createElement("li");
-            li.innerText = typeof item === 'string' ? item : (item.text || 'Analysis point');
-            listEl.appendChild(li);
-          });
+          // Safe array access
+          const reasons = histR.reasoning || histR.reasons || [];
+          if (reasons.length > 0) {
+            reasons.forEach(item => {
+              const li = document.createElement("li");
+              li.innerText = typeof item === 'string' ? item : (item.text || 'Analysis point');
+              listEl.appendChild(li);
+            });
+          } else {
+            // Fallback if no reasons available
+            const fallbackLi = document.createElement("li");
+            fallbackLi.innerText = 'Analysis data being processed...';
+            listEl.appendChild(fallbackLi);
+          }
         }
       }
     }
     
     // Chart functionality removed - guard against undefined buildChart
     if (typeof buildChart === 'function' && histR && histR.ok) {
-      const step = Math.max(1, Math.floor(histR.labels.length / 120));
-      try {
-        buildChart(
-          histR.labels.filter((_,i) => i%step===0),
-          histR.closes.filter((_,i) => i%step===0),
-          histR.pred.filter((_,i)   => i%step===0),
-        );
-        const chartSubEl = document.getElementById('chartSub');
-        if (chartSubEl) chartSubEl.textContent = `${histR.name || ticker} · ${months} Month View`;
-      } catch (chartError) {
-        console.warn('Chart rendering failed:', chartError);
+      // Safe array access with fallbacks
+      const labels = histR.labels || [];
+      const closes = histR.closes || [];
+      const pred = histR.pred || [];
+      
+      if (labels.length > 0 && closes.length > 0) {
+        const step = Math.max(1, Math.floor(labels.length / 120));
+        try {
+          buildChart(
+            labels.filter((_,i) => i%step===0),
+            closes.filter((_,i) => i%step===0),
+            pred.filter((_,i)   => i%step===0),
+          );
+          const chartSubEl = document.getElementById('chartSub');
+          if (chartSubEl) chartSubEl.textContent = `${histR.name || ticker} · ${months} Month View`;
+        } catch (chartError) {
+          console.warn('Chart rendering failed:', chartError);
+        }
       }
     } else if (analysisResult.status === "rejected") {
       console.warn('Analysis API failed, using fallback UI');
@@ -575,9 +607,13 @@ async function refresh() {
 
 function useFallback(ticker, months) {
   try {
-    let seed = [...ticker].reduce((a,c)=>a+c.charCodeAt(0),0)*31337;
+    // Safe ticker handling
+    const safeTicker = ticker || 'RELIANCE';
+    const safeMonths = months || 6;
+    
+    let seed = [...safeTicker].reduce((a,c)=>a+c.charCodeAt(0),0)*31337;
     const R = () => { seed=(1664525*seed+1013904223)>>>0; return seed/0x100000000; };
-    const pts = months*15; let price = 800+R()*2000;
+    const pts = safeMonths*15; let price = 800+R()*2000;
     const closes=[], labels=[], now=new Date();
     for(let i=0;i<pts;i++){
       price=Math.max(5,price*(1+(R()-.46)*.025)); closes.push(+price.toFixed(2));
@@ -586,13 +622,27 @@ function useFallback(ticker, months) {
     }
     const pred=closes.map((v,i,a)=>{const w=a.slice(Math.max(0,i-7),i+8);return+(w.reduce((s,x)=>s+x,0)/w.length).toFixed(2);});
     
-    // Guard against undefined buildChart
-    if (typeof buildChart === 'function') {
+    // Guard against undefined buildChart and safe array access
+    if (typeof buildChart === 'function' && labels.length > 0 && closes.length > 0) {
       buildChart(labels,closes,pred);
     }
     
     const chartSubEl = document.getElementById('chartSub');
-    if (chartSubEl) chartSubEl.textContent=`${ticker} · ${months} Month View`;
+    if (chartSubEl) chartSubEl.textContent=`${safeTicker} · ${safeMonths} Month View`;
+    
+    // Update analysis sections with fallback data
+    const marketAnalysisEl = document.getElementById("marketAnalysisText");
+    if (marketAnalysisEl) {
+      marketAnalysisEl.innerText = 'Using offline analysis data - backend connection unavailable';
+    }
+    
+    const listEl = document.getElementById("aiReasoningList");
+    if (listEl) {
+      listEl.innerHTML = '';
+      const fallbackLi = document.createElement("li");
+      fallbackLi.innerText = 'Offline mode - showing synthetic analysis data';
+      listEl.appendChild(fallbackLi);
+    }
     
     setCards({ 
       trend:'Sideways',trend_dir:'side',trend_badge:'Neutral',

@@ -287,21 +287,19 @@
           <div class="chart-wrap"><canvas id="myChart"></canvas></div>
         </div>
         
-        <!-- Stock Price Chart -->
-        <div class="chart-container">
-          <canvas id="stockChart"></canvas>
-        </div>
+        <!-- Analysis Section -->
+        <div class="analysis-container">
 
-        <!-- Merged AI Reasoning + Market Analysis -->
-        <div class="ai-panel">
-          <div class="ai-panel-title">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            AI Reasoning &amp; Market Analysis
+          <div class="analysis-card">
+            <h3>📊 Market Analysis</h3>
+            <p id="marketAnalysisText">Loading analysis...</p>
           </div>
-          <div class="r-list" id="rList"></div>
-          <div class="analysis-divider"></div>
-          <div class="analysis-label">Market Analysis</div>
-          <p class="analysis-text" id="anText">—</p>
+
+          <div class="analysis-card">
+            <h3>🤖 AI Reasoning</h3>
+            <ul id="aiReasoningList"></ul>
+          </div>
+
         </div>
       </div>
     </div>
@@ -321,73 +319,6 @@ const user = localStorage.getItem('loggedInUser') || localStorage.getItem('mm_us
 document.getElementById('sideUser').textContent = user;
 document.getElementById('userAvatar').textContent = user.slice(0,2).toUpperCase();
 
-/* ── Stock Chart Function ───────────────────────────────────── */
-let stockChart;
-
-async function loadChart(ticker, months) {
-  try {
-    // Convert months to range format (6 -> 6m, 12 -> 1y, 36 -> 3y, 60 -> 5y)
-    const rangeMap = {6: '6m', 12: '1y', 36: '3y', 60: '5y'};
-    const range = rangeMap[months] || '6m';
-    
-    const data = await API_CONFIG.fetchWithErrorHandling(
-      API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.HISTORY + `?ticker=${ticker}&range=${range}`)
-    );
-
-    if (data.ok && data.data) {
-      const labels = data.data.map(d => d.date);
-      const prices = data.data.map(d => d.close);
-
-      const ctx = document.getElementById("stockChart").getContext("2d");
-
-      if (stockChart) stockChart.destroy();
-
-      stockChart = new Chart(ctx, {
-        type: "line",
-        data: {
-          labels: labels,
-          datasets: [{
-            label: `${ticker} Price`,
-            data: prices,
-            borderWidth: 2,
-            borderColor: '#4ade80',
-            backgroundColor: 'rgba(74, 222, 128, 0.1)',
-            tension: 0.3,
-            fill: true
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              display: true,
-              position: 'top'
-            }
-          },
-          scales: {
-            x: {
-              display: true,
-              title: {
-                display: true,
-                text: 'Date'
-              }
-            },
-            y: {
-              display: true,
-              title: {
-                display: true,
-                text: 'Price (₹)'
-              }
-            }
-          }
-        }
-      });
-    }
-  } catch (error) {
-    console.error('Error loading stock chart:', error);
-  }
-}
 
 document.getElementById('logoutBtn').addEventListener('click', e => {
   e.preventDefault();
@@ -538,6 +469,21 @@ async function refresh() {
       
       console.log('Mapped data for UI:', mappedData);
       setCards(mappedData);
+      
+      // Update new analysis sections
+      if (histR && histR.ok) {
+        document.getElementById("marketAnalysisText").innerText = histR.analysis || 'Analysis data not available';
+        
+        const list = document.getElementById("aiReasoningList");
+        list.innerHTML = "";
+        
+        const reasons = histR.reasoning || histR.reasons || [{text: 'AI analysis completed'}];
+        reasons.forEach(item => {
+          const li = document.createElement("li");
+          li.innerText = typeof item === 'string' ? item : (item.text || 'Analysis point');
+          list.appendChild(li);
+        });
+      }
     }
     
     if (histR && histR.ok) {
@@ -557,8 +503,6 @@ async function refresh() {
     useFallback(ticker, months);
   }
   
-  // Load stock chart
-  loadChart(ticker, months);
   sessionStorage.setItem('mm_ticker', ticker);
 }
 

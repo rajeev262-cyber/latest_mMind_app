@@ -466,22 +466,28 @@ function setCards(d) {
 
 /* ── Refresh dashboard ─────────────────────────────────── */
 async function refresh() {
+  // Move ticker declaration to top of function - outside any blocks
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlTicker = urlParams.get("ticker");
+  
+  // Safe DOM access with fallbacks
+  const stockSelEl = document.getElementById('stockSel');
+  const rangeSelEl = document.getElementById('rangeSel');
+  const ticker = urlTicker || (stockSelEl ? (stockSelEl.value || 'RELIANCE') : 'RELIANCE');
+  const months = rangeSelEl ? (parseInt(rangeSelEl.value) || 6) : 6;
+
+  // Debug logging for ticker variable
+  console.log("Ticker:", ticker);
+  console.log("URL Ticker:", urlTicker);
+  console.log("DOM Ticker:", stockSelEl ? stockSelEl.value : 'DOM element not found');
+
+  // Validate ticker is defined
+  if (!ticker) {
+    console.error("Ticker is undefined - this should never happen");
+    return; // Exit early if ticker is somehow undefined
+  }
+
   try {
-    // Safe ticker initialization with multiple fallbacks
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlTicker = urlParams.get("ticker");
-    
-    // Safe DOM access with fallbacks
-    const stockSelEl = document.getElementById('stockSel');
-    const rangeSelEl = document.getElementById('rangeSel');
-    const ticker = urlTicker || (stockSelEl ? (stockSelEl.value || 'RELIANCE') : 'RELIANCE');
-    const months = rangeSelEl ? (parseInt(rangeSelEl.value) || 6) : 6;
-
-    // Debug logging for ticker variable
-    console.log("Ticker:", ticker);
-    console.log("URL Ticker:", urlTicker);
-    console.log("DOM Ticker:", stockSelEl ? stockSelEl.value : 'DOM element not found');
-
     // Set loading state safely
     const anTextEl = document.getElementById('anText');
     if (anTextEl) anTextEl.textContent = 'Analyzing...';

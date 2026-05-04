@@ -502,91 +502,81 @@ async function refresh() {
     const rangeMap = {6: '6m', 12: '1y', 36: '3y', 60: '5y'};
     const range = rangeMap[months] || '6m';
     
-    const [predResult, analysisResult] = await Promise.allSettled([
+    const [predResult, analysisResult, historyResult] = await Promise.allSettled([
       API_CONFIG.fetchWithErrorHandling(API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.PREDICT + `?ticker=${ticker}`)),
-      API_CONFIG.fetchWithErrorHandling(API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.ANALYSIS + `?ticker=${ticker}&range=${range}`))
+      API_CONFIG.fetchWithErrorHandling(API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.ANALYSIS + `?ticker=${ticker}&range=${range}`)),
+      API_CONFIG.fetchWithErrorHandling(API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.HISTORY + `?ticker=${ticker}&range=${range}`))
     ]);
     
     // Extract data safely
     const predR = predResult.status === "fulfilled" ? predResult.value : null;
-    const histR = analysisResult.status === "fulfilled" ? analysisResult.value : null;
+    const analysisR = analysisResult.status === "fulfilled" ? analysisResult.value : null;
+    const histR = historyResult.status === "fulfilled" ? historyResult.value : null;
     
     // Debug logging
     console.log('Prediction API Response:', predR);
-    console.log('Analysis API Response:', histR);
+    console.log('Analysis API Response:', analysisR);
+    console.log('History API Response:', histR);
     console.log('Prediction Status:', predResult.status);
     console.log('Analysis Status:', analysisResult.status);
+    console.log('History Status:', historyResult.status);
     
-    // Handle prediction data
+    // Handle prediction data for UI cards
     if (predR && (predR.ok || predR.trend)) {
-      // Safe array access with fallbacks
-      const predReasons = predR.reasons || [];
-      const histReasons = (histR && histR.reasoning) || (histR && histR.reasons) || [];
-      
-      // Merge API responses safely
-      const mergedData = {
-        ...predR,
-        ...histR,
-        // Ensure arrays are always defined
-        reasons: predReasons.length > 0 ? predReasons : histReasons,
-        reasoning: histReasons.length > 0 ? histReasons : predReasons
-      };
-      
-      // Map API response to expected format for setCards
+      // Map prediction API response to UI format
       const mappedData = {
-        trend: mergedData.trend || 'Sideways',
-        trend_dir: mergedData.trend_dir || 'side',
-        trend_badge: mergedData.trend_badge || 'NEUTRAL',
-        risk: mergedData.risk || 'Medium Risk',
-        risk_lv: mergedData.risk_lv || 'mid',
-        risk_badge: mergedData.risk_badge || 'MED',
-        confidence: mergedData.confidence || 50,
-        conf_lbl: mergedData.conf_lbl || 'Moderate Confidence',
-        conf_badge: mergedData.conf_badge || 'MED',
-        signal: mergedData.signal || 3,
-        signal_lbl: mergedData.signal_lbl || 'Hold',
-        reasons: mergedData.reasons || [{text: 'AI analysis completed', warn: false}],
-        analysis: mergedData.analysis || mergedData.reason || 'Analysis completed successfully'
+        trend: predR.trend || 'Sideways',
+        trend_dir: predR.trend_dir || 'side',
+        trend_badge: predR.trend_badge || 'NEUTRAL',
+        risk: predR.risk || 'Medium Risk',
+        risk_lv: predR.risk_lv || 'mid',
+        risk_badge: predR.risk_badge || 'MED',
+        confidence: predR.confidence || 50,
+        conf_lbl: predR.conf_lbl || 'Moderate Confidence',
+        conf_badge: predR.conf_badge || 'MED',
+        signal: predR.signal || 3,
+        signal_lbl: predR.signal_lbl || 'Hold',
+        reasons: predR.reasons || [{text: 'AI analysis completed', warn: false}],
+        analysis: predR.analysis || predR.reason || 'Analysis completed successfully'
       };
       
       console.log('Mapped data for UI:', mappedData);
       setCards(mappedData);
+    }
+    
+    // Update analysis sections with analysis API data
+    if (analysisR && analysisR.ok) {
+      const marketAnalysisEl = document.getElementById("marketAnalysisText");
+      if (marketAnalysisEl) {
+        marketAnalysisEl.innerText = analysisR.analysis || 'Analysis data not available';
+      }
       
-      // Update new analysis sections with safe data access
-      if (histR && histR.ok) {
-        const marketAnalysisEl = document.getElementById("marketAnalysisText");
-        if (marketAnalysisEl) {
-          marketAnalysisEl.innerText = histR.analysis || 'Analysis data not available';
-        }
+      const listEl = document.getElementById("aiReasoningList");
+      if (listEl) {
+        listEl.innerHTML = "";
         
-        const listEl = document.getElementById("aiReasoningList");
-        if (listEl) {
-          listEl.innerHTML = "";
-          
-          // Safe array access
-          const reasons = histR.reasoning || histR.reasons || [];
-          if (reasons.length > 0) {
-            reasons.forEach(item => {
-              const li = document.createElement("li");
-              li.innerText = typeof item === 'string' ? item : (item.text || 'Analysis point');
-              listEl.appendChild(li);
-            });
-          } else {
-            // Fallback if no reasons available
-            const fallbackLi = document.createElement("li");
-            fallbackLi.innerText = 'Analysis data being processed...';
-            listEl.appendChild(fallbackLi);
-          }
+        // Safe array access
+        const reasons = analysisR.reasoning || analysisR.reasons || [];
+        if (reasons.length > 0) {
+          reasons.forEach(item => {
+            const li = document.createElement("li");
+            li.innerText = typeof item === 'string' ? item : (item.text || 'Analysis point');
+            listEl.appendChild(li);
+          });
+        } else {
+          // Fallback if no reasons available
+          const fallbackLi = document.createElement("li");
+          fallbackLi.innerText = 'Analysis data being processed...';
+          listEl.appendChild(fallbackLi);
         }
       }
     }
     
-    // Chart functionality removed - guard against undefined buildChart
-    if (typeof buildChart === 'function' && histR && histR.ok) {
-      // Safe array access with fallbacks
-      const labels = histR.labels || [];
-      const closes = histR.closes || [];
-      const pred = histR.pred || [];
+    // Render chart with history API data
+    if (histR && histR.ok && histR.data) {
+      const historyData = histR.data;
+      const labels = historyData.map(item => item.date);
+      const closes = historyData.map(item => item.close);
       
       if (labels.length > 0 && closes.length > 0) {
         const step = Math.max(1, Math.floor(labels.length / 120));
@@ -594,10 +584,10 @@ async function refresh() {
           buildChart(
             labels.filter((_,i) => i%step===0),
             closes.filter((_,i) => i%step===0),
-            pred.filter((_,i)   => i%step===0),
+            closes.filter((_,i) => i%step===0) // Use same data for prediction line
           );
           const chartSubEl = document.getElementById('chartSub');
-          if (chartSubEl) chartSubEl.textContent = `${histR.name || ticker} · ${months} Month View`;
+          if (chartSubEl) chartSubEl.textContent = `${ticker} · ${months} Month View`;
         } catch (chartError) {
           console.warn('Chart rendering failed:', chartError);
         }
@@ -684,6 +674,7 @@ function runPredict() {
 }
 
 window.addEventListener('DOMContentLoaded', refresh);
+window.onload = refresh; // Backup to ensure refresh runs on page load
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </body>

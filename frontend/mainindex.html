@@ -314,14 +314,9 @@
 <script src="api-config.js"></script>
 <script>
 
-/* ── GLOBAL TICKER STATE (SINGLE SOURCE OF TRUTH) ─────────────── */
-let CURRENT_TICKER = null;
-
-/* ── GET TICKER FROM URL FIRST ───────────────────────────────── */
-function getTicker() {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("ticker") || "HDFCBANK";
-}
+/* ── ENSURE TICKER IS GLOBAL AND CONSISTENT ───────────────────────── */
+const urlParams = new URLSearchParams(window.location.search);
+window.currentTicker = urlParams.get("ticker") || "TCS";
 
 /* ── Auth guard ──────────────────────────────────────────── */
 const user = localStorage.getItem('loggedInUser') || localStorage.getItem('mm_user') || 'Analyst';
@@ -362,34 +357,16 @@ if (hamburgerEl && sidebar && overlay) {
   });
 }
 
-/* ── INITIALIZE TICKER CORRECTLY ON PAGE LOAD ───────────────── */
-CURRENT_TICKER = getTicker();
-
-document.getElementById("stockSel").value = CURRENT_TICKER;
-
-/* ── FIX DROPDOWN CHANGE (MOST IMPORTANT) ─────────────────── */
-document.getElementById("stockSel").addEventListener("change", (e) => {
-    const newTicker = e.target.value;
-
-    CURRENT_TICKER = newTicker;
-
-    // Update URL WITHOUT reload
-    window.history.replaceState({}, "", `?ticker=${newTicker}`);
-
-    // Save in session
-    sessionStorage.setItem("ticker", newTicker);
-
-    console.log("Ticker changed to:", newTicker);
-    console.log("CURRENT_TICKER:", CURRENT_TICKER);
-
-    // REFRESH FULL DASHBOARD
-    refresh();
+/* ── ENSURE REFRESH RUNS ON LOAD ───────────────── */
+window.addEventListener("DOMContentLoaded", () => {
+  refresh();
 });
 
-/* ── FORCE REFRESH ON TICKER CHANGE ───────────────────────── */
-function updateTicker(newTicker) {
+/* ── FIX TICKER CHANGE BEHAVIOR ───────────────────────── */
+document.getElementById("stock-select").addEventListener("change", (e) => {
+  const newTicker = e.target.value;
   window.location.href = `mainindex.html?ticker=${newTicker}`;
-}
+});
 
 /* ── Chart ─────────────────────────────────────────────── */
 let chart = null;
@@ -502,21 +479,27 @@ function setCards(d) {
   if (confBadgeEl) confBadgeEl.textContent = d.conf_badge || '';
 
   /* Signal bars - FIXED LOGIC */
-  // FIX SIGNAL STRENGTH CARD
-  const signal = predRes.signal || 0;
+  // FIX SIGNAL STRENGTH (HANDLE ZERO CASE)
+  const signal = predRes.signal ?? 0;
 
   const signalBars = document.querySelectorAll(".signal-bar");
+  const signalLabel = document.getElementById("signal-label");
 
-  signalBars.forEach((bar, index) => {
-    if (index < Math.abs(signal)) {
-      bar.classList.add("active");
-    } else {
-      bar.classList.remove("active");
-    }
-  });
+  // reset all bars
+  signalBars.forEach(bar => bar.classList.remove("active"));
 
-  document.getElementById("signal-label").textContent =
-    predRes.signal_lbl || "Neutral";
+  // handle signal = 0 (CRITICAL FIX)
+  if (signal === 0) {
+    signalLabel.textContent = "Neutral";
+  } else {
+    signalBars.forEach((bar, index) => {
+      if (index < Math.abs(signal)) {
+        bar.classList.add("active");
+      }
+    });
+
+    signalLabel.textContent = predRes.signal_lbl || "Signal";
+  }
 
   /* Merged AI Reasoning + Analysis */
   const rListEl = document.getElementById('rList');
@@ -531,66 +514,47 @@ function setCards(d) {
 
 /* ── Refresh dashboard ─────────────────────────────────── */
 async function refresh() {
-  // FIX TICKER FLOW (CRITICAL)
-  const urlParams = new URLSearchParams(window.location.search);
-  const ticker = urlParams.get("ticker") || "TCS";
-
-  window.currentTicker = ticker;
+  // FETCH ALL DATA PROPERLY
+  const ticker = window.currentTicker;
   
-  // Safe DOM access with fallbacks
-  const rangeSelEl = document.getElementById('rangeSel');
-  const months = rangeSelEl ? (parseInt(rangeSelEl.value) || 6) : 6;
-
-  // ADD DEBUG LOGS
-  console.log("CURRENT_TICKER:", CURRENT_TICKER);
-  console.log("Using ticker:", ticker);
-
-  // Validate ticker is defined
-  if (!ticker) {
-    console.error("Ticker is undefined - this should never happen");
-    return; // Exit early if ticker is somehow undefined
-  }
-
+  console.log("Refreshing dashboard for:", ticker);
+  
   try {
-    // Set loading state safely
-    const anTextEl = document.getElementById('anText');
-    if (anTextEl) anTextEl.textContent = 'Analyzing...';
-
-    // Convert months to range format (6 -> 6m, 12 -> 1y, 36 -> 3y, 60 -> 5y)
-    const rangeMap = {6: '6m', 12: '1y', 36: '3y', 60: '5y'};
-    const range = rangeMap[months] || '6m';
-    
-    // FIX API RESPONSE MAPPING
-    const [predRes, analysisRes] = await Promise.all([
+    // FETCH ALL DATA PROPERLY
+    const [predRes, analysisRes, historyRes] = await Promise.all([
       fetch(`/api/stocks/predict?ticker=${ticker}`).then(r => r.json()),
-      fetch(`/api/stocks/analysis?ticker=${ticker}&range=6m`).then(r => r.json())
+      fetch(`/api/stocks/analysis?ticker=${ticker}&range=6m`).then(r => r.json()),
+      fetch(`/api/stocks/history?ticker=${ticker}&range=6m`).then(r => r.json())
     ]);
     
-    // Also get history for chart
-    const histRes = await fetch(`/api/stocks/history?ticker=${ticker}&range=6m`).then(r => r.json());
-    
-    // ADD DEBUG LOGS
-    console.log("Ticker:", ticker);
     console.log("Prediction:", predRes);
     console.log("Analysis:", analysisRes);
     
     try {
-      // FIX AI REASONING (DYNAMIC)
+      // FIX AI REASONING (DYNAMIC RENDER)
       const reasoningList = document.getElementById("ai-reasoning-list");
-      
-      reasoningList.innerHTML = "";
-      
-      if (analysisRes.reasoning && Array.isArray(analysisRes.reasoning)) {
-        analysisRes.reasoning.forEach(item => {
+
+      if (reasoningList) {
+        reasoningList.innerHTML = "";
+
+        (analysisRes.reasoning || []).forEach(item => {
           const li = document.createElement("li");
-          li.textContent = item.text || item;
+
+          li.textContent = typeof item === "string"
+            ? item
+            : item.text;
+
           reasoningList.appendChild(li);
         });
       }
       
       // FIX MARKET ANALYSIS TEXT
-      document.getElementById("market-analysis-text").textContent =
-        analysisRes.analysis || "No analysis available";
+      const analysisBox = document.getElementById("market-analysis-text");
+
+      if (analysisBox) {
+        analysisBox.textContent =
+          analysisRes.analysis || "No analysis available";
+      }
       
       // Handle prediction data for UI cards
       if (predRes && (predRes.ok || predRes.trend)) {

@@ -314,6 +314,20 @@
 <script src="api-config.js"></script>
 <script>
 
+/* ── FIX WRONG API BASE URL (CRITICAL) ───────────────────────── */
+const BASE_URL = "https://marketmind-backend-w8gx.onrender.com/api";
+
+/* ── HANDLE 404 + JSON ERROR SAFELY ───────────────────────── */
+async function safeFetch(url) {
+  const res = await fetch(url);
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+
+  return res.json();
+}
+
 /* ── ENSURE TICKER IS GLOBAL AND CONSISTENT ───────────────────────── */
 const urlParams = new URLSearchParams(window.location.search);
 window.currentTicker = urlParams.get("ticker") || "TCS";
@@ -362,11 +376,15 @@ window.addEventListener("DOMContentLoaded", () => {
   refresh();
 });
 
-/* ── FIX TICKER CHANGE BEHAVIOR ───────────────────────── */
-document.getElementById("stock-select").addEventListener("change", (e) => {
-  const newTicker = e.target.value;
-  window.location.href = `mainindex.html?ticker=${newTicker}`;
-});
+/* ── FIX addEventListener ERROR ───────────────────────── */
+const dropdown = document.getElementById("stock-select");
+
+if (dropdown) {
+  dropdown.addEventListener("change", (e) => {
+    const newTicker = e.target.value;
+    window.location.href = `mainindex.html?ticker=${newTicker}`;
+  });
+}
 
 /* ── Chart ─────────────────────────────────────────────── */
 let chart = null;
@@ -517,14 +535,17 @@ async function refresh() {
   // FETCH ALL DATA PROPERLY
   const ticker = window.currentTicker;
   
+  // ADD DEBUG LOGS
+  console.log("Using API:", BASE_URL);
+  console.log("Ticker:", ticker);
   console.log("Refreshing dashboard for:", ticker);
   
   try {
-    // FETCH ALL DATA PROPERLY
+    // FIX ALL API CALLS
     const [predRes, analysisRes, historyRes] = await Promise.all([
-      fetch(`/api/stocks/predict?ticker=${ticker}`).then(r => r.json()),
-      fetch(`/api/stocks/analysis?ticker=${ticker}&range=6m`).then(r => r.json()),
-      fetch(`/api/stocks/history?ticker=${ticker}&range=6m`).then(r => r.json())
+      safeFetch(`${BASE_URL}/stocks/predict?ticker=${ticker}`),
+      safeFetch(`${BASE_URL}/stocks/analysis?ticker=${ticker}&range=6m`),
+      safeFetch(`${BASE_URL}/stocks/history?ticker=${ticker}&range=6m`)
     ]);
     
     console.log("Prediction:", predRes);
@@ -604,7 +625,7 @@ async function refresh() {
             predictedData.filter((_,i) => i%step===0)
           );
           const chartSubEl = document.getElementById('chartSub');
-          if (chartSubEl) chartSubEl.textContent = `${ticker} · ${months} Month View`;
+          if (chartSubEl) chartSubEl.textContent = `${ticker} · 6 Month View`;
         } catch (chartError) {
           console.warn('Chart rendering failed:', chartError);
         }

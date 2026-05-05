@@ -497,31 +497,31 @@ function setCards(d) {
   if (confBadgeEl) confBadgeEl.textContent = d.conf_badge || '';
 
   /* Signal bars - FIXED LOGIC */
-  const signal = d.signal;
-  const signalLabel = d.signal_lbl;
+  // FIX SIGNAL STRENGTH NOT WORKING
+  const signal = Number(d?.signal ?? 0);
+  const signalLabel = d?.signal_lbl || "Hold";
 
-  const signalLblEl = document.getElementById('signalLbl');
-  if (signalLblEl) signalLblEl.textContent = signalLabel;
+  // UPDATE TEXT
+  const signalTextEl = document.getElementById('signalText');
+  if (signalTextEl) signalTextEl.textContent = signalLabel;
 
-  const bars = document.querySelectorAll('.signal-bars .bar');
-  bars.forEach((bar, index) => {
-    bar.classList.remove("active");
-  });
+  // UPDATE BARS (IMPORTANT)
+  const bars = document.querySelectorAll(".signal-bar");
+  bars.forEach(bar => bar.classList.remove("active"));
 
   if (signal === 1) {
-    // BUY - activate middle and upper bars
-    if (bars[2]) bars[2].classList.add("active");
-    if (bars[3]) bars[3].classList.add("active");
-    if (bars[4]) bars[4].classList.add("active");
+    // BUY → right side bars
+    bars[2]?.classList.add("active");
+    bars[3]?.classList.add("active");
   }
   else if (signal === 0) {
-    // HOLD - activate middle bar only
-    if (bars[2]) bars[2].classList.add("active");
+    // HOLD → middle
+    bars[2]?.classList.add("active");
   }
   else if (signal === -1) {
-    // SELL - activate lower bars
-    if (bars[0]) bars[0].classList.add("active");
-    if (bars[1]) bars[1].classList.add("active");
+    // SELL → left side
+    bars[0]?.classList.add("active");
+    bars[1]?.classList.add("active");
   }
 
   /* Merged AI Reasoning + Analysis */
@@ -582,47 +582,54 @@ async function refresh() {
     console.log('Analysis Status:', analysisResult.status);
     console.log('History Status:', historyResult.status);
     
-    // Handle prediction data for UI cards
-    if (predR && (predR.ok || predR.trend)) {
-      // Map prediction API response to UI format
-      const mappedData = {
-        trend: predR.trend || 'Sideways',
-        trend_dir: predR.trend_dir || 'side',
-        trend_badge: predR.trend_badge || 'NEUTRAL',
-        risk: predR.risk || 'Medium Risk',
-        risk_lv: predR.risk_lv || 'mid',
-        risk_badge: predR.risk_badge || 'MED',
-        confidence: predR.confidence || 50,
-        conf_lbl: predR.conf_lbl || 'Moderate Confidence',
-        conf_badge: predR.conf_badge || 'MED',
-        signal: predR.signal || 3,
-        signal_lbl: predR.signal_lbl || 'Hold',
-        reasons: predR.reasons || [{text: 'AI analysis completed', warn: false}],
-        analysis: predR.analysis || predR.reason || 'Analysis completed successfully'
-      };
+    try {
+      // ADD DEBUG LOGS
+      console.log("Analysis:", analysisR);
+      console.log("Reasoning:", analysisR?.reasoning);
+      console.log("Signal:", predR?.signal);
       
-      console.log('Mapped data for UI:', mappedData);
-      setCards(mappedData);
-    }
-    
-    // Update analysis sections with analysis API data
-    if (analysisR && analysisR.ok) {
-      // FIX STATIC TEXT ISSUE
-      const analysisTextEl = document.getElementById("marketAnalysisText");
-      if (analysisTextEl) {
-        analysisTextEl.textContent = analysisR.analysis || 'Analysis data not available';
+      // Handle prediction data for UI cards
+      if (predR && (predR.ok || predR.trend)) {
+        // Map prediction API response to UI format
+        const mappedData = {
+          trend: predR.trend || 'Sideways',
+          trend_dir: predR.trend_dir || 'side',
+          trend_badge: predR.trend_badge || 'NEUTRAL',
+          risk: predR.risk || 'Medium Risk',
+          risk_lv: predR.risk_lv || 'mid',
+          risk_badge: predR.risk_badge || 'MED',
+          confidence: predR.confidence || 50,
+          conf_lbl: predR.conf_lbl || 'Moderate Confidence',
+          conf_badge: predR.conf_badge || 'MED',
+          signal: predR.signal || 3,
+          signal_lbl: predR.signal_lbl || 'Hold',
+          reasons: predR.reasons || [{text: 'AI analysis completed', warn: false}],
+          analysis: predR.analysis || predR.reason || 'Analysis completed successfully'
+        };
+        
+        console.log('Mapped data for UI:', mappedData);
+        setCards(mappedData);
       }
       
-      const reasoningListEl = document.getElementById("aiReasoningList");
-      if (reasoningListEl) {
-        // FIX STATIC TEXT ISSUE
-        const reasons = analysisR.reasoning || analysisR.reasons || [];
-        reasoningListEl.innerHTML = reasons.map(r => `<li>${typeof r === 'string' ? r : (r.text || 'Analysis point')}</li>`).join("");
+      // Update analysis sections with analysis API data
+      if (analysisR && analysisR.ok) {
+        // FIX MARKET ANALYSIS TEXT STATIC
+        document.getElementById("marketAnalysisText").textContent =
+            analysisR?.analysis || "No analysis available";
         
-        if (reasons.length === 0) {
-          reasoningListEl.innerHTML = '<li>Analysis data being processed...</li>';
+        // FIX AI REASONING NOT SHOWING
+        const reasoningList = document.getElementById("aiReasoningList");
+        
+        if (analysisR && Array.isArray(analysisR.reasoning)) {
+            reasoningList.innerHTML = analysisR.reasoning
+                .map(r => `<li>• ${r}</li>`)
+                .join("");
+        } else {
+            reasoningList.innerHTML = "<li>No reasoning available</li>";
         }
       }
+    } catch (err) {
+      console.error("UI update error:", err);
     }
     
     // Render chart with history API data and real forecast

@@ -580,10 +580,12 @@ async function refresh() {
         reasoningList.innerHTML = "<li>Backend connection unavailable - please try again later</li>";
       }
 
-      // FALLBACK MARKET ANALYSIS
+      // FALLBACK MARKET ANALYSIS (SAFE DOM CHECKS)
       const analysisText = document.getElementById("analysisText");
       if (analysisText) {
         analysisText.textContent = "Unable to connect to analysis service - please refresh the page";
+      } else {
+        console.warn("analysisText not found — check HTML ID");
       }
 
       // FALLBACK SIGNAL STRENGTH
@@ -596,68 +598,70 @@ async function refresh() {
       return; // Exit early since we don't have valid data
     }
 
-    // FIX AI REASONING (KEEP SIMPLE)
+    // ADD DEBUG LOGS (TO VERIFY IDs)
+    console.log("Checking DOM elements:");
+    console.log("reasoningList:", document.getElementById("reasoningList"));
+    console.log("analysisText:", document.getElementById("analysisText"));
+    console.log("signalText:", document.getElementById("signalText"));
+
+    // FIX AI REASONING (SAFE DOM CHECKS)
     const reasoningList = document.getElementById("reasoningList");
 
-    if (analysis && Array.isArray(analysis.reasoning)) {
-        reasoningList.innerHTML = analysis.reasoning
-            .map(r => `<li>• ${typeof r === "string" ? r : r.text}</li>`)
-            .join("");
+    if (reasoningList) {
+        if (analysis && Array.isArray(analysis.reasoning)) {
+            reasoningList.innerHTML = analysis.reasoning
+                .map(r => `<li>• ${typeof r === "string" ? r : r.text}</li>`)
+                .join("");
+        } else {
+            reasoningList.innerHTML = "<li>No reasoning available</li>";
+        }
     } else {
-        reasoningList.innerHTML = "<li>No reasoning available</li>";
+        console.warn("reasoningList not found — check HTML ID");
     }
 
-    // FIX MARKET ANALYSIS TEXT
+    // FIX MARKET ANALYSIS TEXT (SAFE DOM CHECKS)
     const analysisText = document.getElementById("analysisText");
 
     if (analysisText) {
         analysisText.textContent =
-            analysis?.analysis || "No analysis available";
+                analysis?.analysis || "No analysis available";
+    } else {
+        console.warn("analysisText not found — check HTML ID");
     }
 
-    // FIX SIGNAL STRENGTH (WORKING VERSION)
-    const signal = Number(prediction?.signal ?? 0);
-    const signalLabel = prediction?.signal_lbl || "Hold";
+    // FIX SIGNAL STRENGTH (SAFE DOM ACCESS)
+    try {
+      const signal = Number(prediction?.signal ?? 0);
+      const signalLabel = prediction?.signal_lbl || "Hold";
 
-    const signalText = document.getElementById("signalText");
-    if (signalText) signalText.textContent = signalLabel;
+      const signalText = document.getElementById("signalText");
+      if (signalText) signalText.textContent = signalLabel;
 
-    const bars = document.querySelectorAll(".signal-bar");
+      const bars = document.querySelectorAll(".signal-bar");
 
-    // reset
-    bars.forEach(bar => bar.classList.remove("active"));
+      if (bars.length > 0) {
+        bars.forEach(bar => bar.classList.remove("active"));
 
-    // apply
-    if (signal === 1) {
-        bars[2]?.classList.add("active");
-        bars[3]?.classList.add("active");
+        // apply signal logic
+        if (signal === 1) {
+          bars[2]?.classList.add("active");
+          bars[3]?.classList.add("active");
+        }
+        else if (signal === 0) {
+          bars[2]?.classList.add("active");
+        }
+        else if (signal === -1) {
+          bars[0]?.classList.add("active");
+          bars[1]?.classList.add("active");
+        }
+      } else {
+        console.warn("signal bars not found");
+      }
+    } catch (err) {
+      console.error("UI update error:", err);
     }
-    else if (signal === 0) {
-        bars[2]?.classList.add("active");
-    }
-    else if (signal === -1) {
-        bars[0]?.classList.add("active");
-        bars[1]?.classList.add("active");
-    }
 
-  } catch (err) {
-    console.error("UI update error:", err);
-  }
-}
-
-function useFallback(ticker, months) {
-  try {
-    // Safe ticker handling
-    const safeTicker = ticker || 'RELIANCE';
-    const safeMonths = months || 6;
-    
-    let seed = [...safeTicker].reduce((a,c)=>a+c.charCodeAt(0),0)*31337;
-    const R = () => { seed=(1664525*seed+1013904223)>>>0; return seed/0x100000000; };
-    const pts = safeMonths*15; let price = 800+R()*2000;
-    const closes=[], labels=[], now=new Date();
-    for(let i=0;i<pts;i++){
-      price=Math.max(5,price*(1+(R()-.46)*.025)); closes.push(+price.toFixed(2));
-      const d=new Date(now); d.setDate(now.getDate()-(pts-i)*2);
+    const d=new Date(now); d.setDate(now.getDate()-(pts-i)*2);
       labels.push(i%(Math.floor(pts/6))===0?d.toLocaleString('default',{month:'short',year:'2-digit'}):'');
     }
     const pred=closes.map((v,i,a)=>{const w=a.slice(Math.max(0,i-7),i+8);return+(w.reduce((s,x)=>s+x,0)/w.length).toFixed(2);});

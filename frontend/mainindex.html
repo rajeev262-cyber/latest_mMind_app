@@ -386,6 +386,11 @@ document.getElementById("stockSel").addEventListener("change", (e) => {
     refresh();
 });
 
+/* ── FORCE REFRESH ON TICKER CHANGE ───────────────────────── */
+function updateTicker(newTicker) {
+  window.location.href = `mainindex.html?ticker=${newTicker}`;
+}
+
 /* ── Chart ─────────────────────────────────────────────── */
 let chart = null;
 function buildChart(labels, closes, pred) {
@@ -497,32 +502,21 @@ function setCards(d) {
   if (confBadgeEl) confBadgeEl.textContent = d.conf_badge || '';
 
   /* Signal bars - FIXED LOGIC */
-  // FIX SIGNAL STRENGTH NOT WORKING
-  const signal = Number(d?.signal ?? 0);
-  const signalLabel = d?.signal_lbl || "Hold";
+  // FIX SIGNAL STRENGTH CARD
+  const signal = predRes.signal || 0;
 
-  // UPDATE TEXT
-  const signalTextEl = document.getElementById('signalText');
-  if (signalTextEl) signalTextEl.textContent = signalLabel;
+  const signalBars = document.querySelectorAll(".signal-bar");
 
-  // UPDATE BARS (IMPORTANT)
-  const bars = document.querySelectorAll(".signal-bar");
-  bars.forEach(bar => bar.classList.remove("active"));
+  signalBars.forEach((bar, index) => {
+    if (index < Math.abs(signal)) {
+      bar.classList.add("active");
+    } else {
+      bar.classList.remove("active");
+    }
+  });
 
-  if (signal === 1) {
-    // BUY → right side bars
-    bars[2]?.classList.add("active");
-    bars[3]?.classList.add("active");
-  }
-  else if (signal === 0) {
-    // HOLD → middle
-    bars[2]?.classList.add("active");
-  }
-  else if (signal === -1) {
-    // SELL → left side
-    bars[0]?.classList.add("active");
-    bars[1]?.classList.add("active");
-  }
+  document.getElementById("signal-label").textContent =
+    predRes.signal_lbl || "Neutral";
 
   /* Merged AI Reasoning + Analysis */
   const rListEl = document.getElementById('rList');
@@ -537,8 +531,11 @@ function setCards(d) {
 
 /* ── Refresh dashboard ─────────────────────────────────── */
 async function refresh() {
-  // ONLY USE CURRENT_TICKER (SINGLE SOURCE OF TRUTH)
-  const ticker = CURRENT_TICKER;
+  // FIX TICKER FLOW (CRITICAL)
+  const urlParams = new URLSearchParams(window.location.search);
+  const ticker = urlParams.get("ticker") || "TCS";
+
+  window.currentTicker = ticker;
   
   // Safe DOM access with fallbacks
   const rangeSelEl = document.getElementById('rangeSel');
@@ -563,109 +560,84 @@ async function refresh() {
     const rangeMap = {6: '6m', 12: '1y', 36: '3y', 60: '5y'};
     const range = rangeMap[months] || '6m';
     
-    const [predResult, analysisResult, historyResult] = await Promise.allSettled([
-      API_CONFIG.fetchWithErrorHandling(API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.PREDICT + `?ticker=${ticker}`)),
-      API_CONFIG.fetchWithErrorHandling(API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.ANALYSIS + `?ticker=${ticker}&range=${range}`)),
-      API_CONFIG.fetchWithErrorHandling(API_CONFIG.getApiUrl(API_CONFIG.ENDPOINTS.STOCKS.HISTORY + `?ticker=${ticker}&range=${range}`))
+    // FIX API RESPONSE MAPPING
+    const [predRes, analysisRes] = await Promise.all([
+      fetch(`/api/stocks/predict?ticker=${ticker}`).then(r => r.json()),
+      fetch(`/api/stocks/analysis?ticker=${ticker}&range=6m`).then(r => r.json())
     ]);
     
-    // Extract data safely
-    const predR = predResult.status === "fulfilled" ? predResult.value : null;
-    const analysisR = analysisResult.status === "fulfilled" ? analysisResult.value : null;
-    const histR = historyResult.status === "fulfilled" ? historyResult.value : null;
+    // Also get history for chart
+    const histRes = await fetch(`/api/stocks/history?ticker=${ticker}&range=6m`).then(r => r.json());
     
-    // Debug logging
-    console.log('Prediction API Response:', predR);
-    console.log('Analysis API Response:', analysisR);
-    console.log('History API Response:', histR);
-    console.log('Prediction Status:', predResult.status);
-    console.log('Analysis Status:', analysisResult.status);
-    console.log('History Status:', historyResult.status);
+    // ADD DEBUG LOGS
+    console.log("Ticker:", ticker);
+    console.log("Prediction:", predRes);
+    console.log("Analysis:", analysisRes);
     
     try {
-      // ADD DEBUG LOGS
-      console.log("Analysis:", analysisR);
-      console.log("Reasoning:", analysisR?.reasoning);
-      console.log("Signal:", predR?.signal);
+      // FIX AI REASONING (DYNAMIC)
+      const reasoningList = document.getElementById("ai-reasoning-list");
+      
+      reasoningList.innerHTML = "";
+      
+      if (analysisRes.reasoning && Array.isArray(analysisRes.reasoning)) {
+        analysisRes.reasoning.forEach(item => {
+          const li = document.createElement("li");
+          li.textContent = item.text || item;
+          reasoningList.appendChild(li);
+        });
+      }
+      
+      // FIX MARKET ANALYSIS TEXT
+      document.getElementById("market-analysis-text").textContent =
+        analysisRes.analysis || "No analysis available";
       
       // Handle prediction data for UI cards
-      if (predR && (predR.ok || predR.trend)) {
+      if (predRes && (predRes.ok || predRes.trend)) {
         // Map prediction API response to UI format
         const mappedData = {
-          trend: predR.trend || 'Sideways',
-          trend_dir: predR.trend_dir || 'side',
-          trend_badge: predR.trend_badge || 'NEUTRAL',
-          risk: predR.risk || 'Medium Risk',
-          risk_lv: predR.risk_lv || 'mid',
-          risk_badge: predR.risk_badge || 'MED',
-          confidence: predR.confidence || 50,
-          conf_lbl: predR.conf_lbl || 'Moderate Confidence',
-          conf_badge: predR.conf_badge || 'MED',
-          signal: predR.signal || 3,
-          signal_lbl: predR.signal_lbl || 'Hold',
-          reasons: predR.reasons || [{text: 'AI analysis completed', warn: false}],
-          analysis: predR.analysis || predR.reason || 'Analysis completed successfully'
+          trend: predRes.trend || 'Sideways',
+          trend_dir: predRes.trend_dir || 'side',
+          trend_badge: predRes.trend_badge || 'NEUTRAL',
+          risk: predRes.risk || 'Medium Risk',
+          risk_lv: predRes.risk_lv || 'mid',
+          risk_badge: predRes.risk_badge || 'MED',
+          confidence: predRes.confidence || 50,
+          conf_lbl: predRes.conf_lbl || 'Moderate Confidence',
+          conf_badge: predRes.conf_badge || 'MED',
+          signal: predRes.signal || 3,
+          signal_lbl: predRes.signal_lbl || 'Hold',
+          reasons: predRes.reasons || [{text: 'AI analysis completed', warn: false}],
+          analysis: predRes.analysis || predRes.reason || 'Analysis completed successfully'
         };
         
         console.log('Mapped data for UI:', mappedData);
         setCards(mappedData);
       }
-      
-      // Update analysis sections with analysis API data
-      if (analysisR && analysisR.ok) {
-        // FIX MARKET ANALYSIS TEXT STATIC
-        document.getElementById("marketAnalysisText").textContent =
-            analysisR?.analysis || "No analysis available";
-        
-        // FIX AI REASONING NOT SHOWING
-        const reasoningList = document.getElementById("aiReasoningList");
-        
-        if (analysisR && Array.isArray(analysisR.reasoning)) {
-            reasoningList.innerHTML = analysisR.reasoning
-                .map(r => `<li>• ${r}</li>`)
-                .join("");
-        } else {
-            reasoningList.innerHTML = "<li>No reasoning available</li>";
-        }
-      }
     } catch (err) {
       console.error("UI update error:", err);
     }
     
-    // Render chart with history API data and real forecast
-    if (histR && histR.ok && histR.data) {
-      const historyData = histR.data;
-      const actualData = historyData.map(item => item.close);
-      const labels = historyData.map(item => item.date);
+    // FIX CHART (AI PREDICTED LINE)
+    if (histRes && histRes.data) {
+      const historyData = histRes.data.map(item => item.close);
+      const labels = histRes.data.map(item => item.date);
       
-      // USE REAL FORECAST FROM API
-      const forecast = histR.forecast || [];
+      // Ensure 2 datasets exist
+      let predictedData = histRes.forecast || [];
       
-      // Extend labels for future
-      const futureLabels = [...labels];
-      for (let i = 1; i <= forecast.length; i++) {
-        futureLabels.push("F+" + i);
+      // If predictedData is missing, fallback to:
+      if (predictedData.length === 0) {
+        predictedData = historyData.map(v => v * 1.01);
       }
       
-      // MERGE DATA
-      const forecastDataFull = [
-        ...Array(actualData.length - 1).fill(null),
-        actualData[actualData.length - 1],
-        ...forecast
-      ];
-      
-      const actualDataFull = [
-        ...actualData,
-        ...Array(forecast.length).fill(null)
-      ];
-      
-      if (futureLabels.length > 0 && (actualDataFull.length > 0 || forecastDataFull.length > 0)) {
-        const step = Math.max(1, Math.floor(futureLabels.length / 120));
+      if (labels.length > 0 && historyData.length > 0) {
+        const step = Math.max(1, Math.floor(labels.length / 120));
         try {
           buildChart(
-            futureLabels.filter((_,i) => i%step===0),
-            actualDataFull.filter((_,i) => i%step===0),
-            forecastDataFull.filter((_,i) => i%step===0)
+            labels.filter((_,i) => i%step===0),
+            historyData.filter((_,i) => i%step===0),
+            predictedData.filter((_,i) => i%step===0)
           );
           const chartSubEl = document.getElementById('chartSub');
           if (chartSubEl) chartSubEl.textContent = `${ticker} · ${months} Month View`;

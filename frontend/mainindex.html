@@ -538,11 +538,63 @@ async function refresh() {
   try {
     const ticker = new URLSearchParams(window.location.search).get("ticker") || "TCS";
 
-    const prediction = await fetch(`/api/stocks/predict?ticker=${ticker}`).then(r => r.json());
-    const analysis = await fetch(`/api/stocks/analysis?ticker=${ticker}&range=6m`).then(r => r.json());
+    // FIX API ENDPOINT URLs
+    const API_BASE = "https://marketmind-backend-w8gx.onrender.com/api";
+    
+    // Add proper error handling for JSON parsing failures
+    async function safeFetch(url) {
+      try {
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          console.warn("API failed:", url, response.status);
+          return null;
+        }
+        
+        const text = await response.text();
+        if (!text || text.trim().startsWith("Not Found") || text.trim().startsWith("<!")) {
+          console.warn("Invalid response:", url);
+          return null;
+        }
+        
+        return JSON.parse(text);
+      } catch (err) {
+        console.error("Fetch error:", err);
+        return null;
+      }
+    }
+
+    const prediction = await safeFetch(`${API_BASE}/stocks/predict?ticker=${ticker}`);
+    const analysis = await safeFetch(`${API_BASE}/stocks/analysis?ticker=${ticker}&range=6m`);
 
     console.log("Prediction:", prediction);
     console.log("Analysis:", analysis);
+
+    // ADD FALLBACK HANDLING FOR API FAILURES
+    if (!prediction || !analysis) {
+      console.warn("API data unavailable, using fallback");
+      
+      // FALLBACK AI REASONING
+      const reasoningList = document.getElementById("reasoningList");
+      if (reasoningList) {
+        reasoningList.innerHTML = "<li>Backend connection unavailable - please try again later</li>";
+      }
+
+      // FALLBACK MARKET ANALYSIS
+      const analysisText = document.getElementById("analysisText");
+      if (analysisText) {
+        analysisText.textContent = "Unable to connect to analysis service - please refresh the page";
+      }
+
+      // FALLBACK SIGNAL STRENGTH
+      const signalText = document.getElementById("signalText");
+      if (signalText) signalText.textContent = "No Signal";
+
+      const bars = document.querySelectorAll(".signal-bar");
+      bars.forEach(bar => bar.classList.remove("active"));
+      
+      return; // Exit early since we don't have valid data
+    }
 
     // FIX AI REASONING (KEEP SIMPLE)
     const reasoningList = document.getElementById("reasoningList");

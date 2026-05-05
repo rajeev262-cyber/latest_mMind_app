@@ -79,6 +79,97 @@ function generateHistory(ticker, months) {
   return rows;
 }
 
+// ── Compute AI-like Forecast Function ───────────────────────────────────
+function computeForecast(history) {
+    const prices = history.map(d => d.close);
+    const n = prices.length;
+
+    // Simple trend slope (linear)
+    const slope = (prices[n-1] - prices[0]) / n;
+
+    // Moving average
+    const avg = prices.reduce((a,b)=>a+b,0) / n;
+
+    // Generate next 10 future points
+    let forecast = [];
+    let last = prices[n-1];
+
+    for (let i = 1; i <= 10; i++) {
+        const next = last + slope + (Math.random() - 0.5) * 5;
+        forecast.push(Number(next.toFixed(2)));
+        last = next;
+    }
+
+    return forecast;
+}
+
+// ── Signal Logic Fix (RSI + MACD based) ───────────────────────────────────
+function computeSignal(history) {
+    if (history.length < 14) return 0; // HOLD if insufficient data
+    
+    const prices = history.map(d => d.close);
+    
+    // Simple RSI calculation (approximation)
+    const rsi = calculateRSI(prices);
+    
+    // Simple MACD calculation (approximation)
+    const macd = calculateMACD(prices);
+    
+    // Signal logic based on RSI + MACD
+    let signal = 0;
+    
+    if (rsi < 30 && macd > 0) signal = 1;       // BUY
+    else if (rsi > 70 && macd < 0) signal = -1; // SELL
+    else signal = 0;                            // HOLD
+    
+    return signal;
+}
+
+// Simple RSI calculation
+function calculateRSI(prices, period = 14) {
+    if (prices.length < period + 1) return 50;
+    
+    let gains = 0;
+    let losses = 0;
+    
+    for (let i = 1; i <= period; i++) {
+        const change = prices[prices.length - i] - prices[prices.length - i - 1];
+        if (change > 0) gains += change;
+        else losses -= change;
+    }
+    
+    const avgGain = gains / period;
+    const avgLoss = losses / period;
+    
+    if (avgLoss === 0) return 100;
+    
+    const rs = avgGain / avgLoss;
+    return 100 - (100 / (1 + rs));
+}
+
+// Simple MACD calculation
+function calculateMACD(prices, fast = 12, slow = 26) {
+    if (prices.length < slow) return 0;
+    
+    const emaFast = calculateEMA(prices, fast);
+    const emaSlow = calculateEMA(prices, slow);
+    
+    return emaFast - emaSlow;
+}
+
+function calculateEMA(prices, period) {
+    if (prices.length < period) return prices[prices.length - 1];
+    
+    const multiplier = 2 / (period + 1);
+    let ema = prices[0];
+    
+    for (let i = 1; i < prices.length; i++) {
+        ema = (prices[i] * multiplier) + (ema * (1 - multiplier));
+    }
+    
+    return ema;
+}
+
 // ── Prediction logic moved to AI service ─────────────────────────────────────
 
 // ── AI Service Integration ─────────────────────────────────────────────
@@ -122,6 +213,17 @@ function getFallbackPrediction(ticker) {
   const risks = ['Low', 'Medium', 'High'];
   const randomIndex = (ticker || '').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 3;
   
+  // Generate history for signal computation
+  const history = generateHistory(ticker, 6);
+  const signal = computeSignal(history);
+  
+  // Map signal to label
+  const signalLabels = {
+    '1': 'BUY',
+    '0': 'HOLD', 
+    '-1': 'SELL'
+  };
+  
   return {
     ok: true,
     ticker: ticker || 'RELIANCE',
@@ -134,8 +236,8 @@ function getFallbackPrediction(ticker) {
     confidence: 65 + randomIndex * 10,
     conf_lbl: 'Moderate Confidence',
     conf_badge: 'MED',
-    signal: 3,
-    signal_lbl: 'Hold',
+    signal: signal,
+    signal_lbl: signalLabels[String(signal)] || 'HOLD',
     reasons: [{text: 'AI service unavailable - using fallback prediction', warn: false}],
     analysis: 'Fallback prediction based on ticker analysis',
     ai_model: "local-fallback"
@@ -158,12 +260,16 @@ exports.history = async (req, res) => {
     
     const kp = KNOWN_PRICES[ticker] || { name: ticker, sector: 'Equity', mcap: '—' };
     const rows = generateHistory(ticker, months);
+    
+    // Generate AI-like forecast
+    const forecast = computeForecast(rows);
 
     res.json({
       ok: true, 
       ticker,
       meta: { name: kp.name, sector: kp.sector, mcap: kp.mcap },
       data: rows,
+      forecast: forecast, // Add forecast data
     });
   } catch (error) {
     console.error('History endpoint error:', error.message);
@@ -171,7 +277,8 @@ exports.history = async (req, res) => {
       ok: false,
       error: 'Failed to fetch history data',
       ticker: req.query.ticker || 'RELIANCE',
-      data: []
+      data: [],
+      forecast: []
     });
   }
 };

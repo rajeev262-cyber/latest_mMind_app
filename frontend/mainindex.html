@@ -412,8 +412,26 @@ function buildChart(labels, closes, pred) {
     data: {
       labels,
       datasets: [
-        { label:'Actual', data: closes, borderColor:'#4ade80', borderWidth:1.5, pointRadius:0, tension:0.3, fill:{target:'origin', above:'rgba(74,222,128,.04)'} },
-        { label:'Forecast', data: pred,  borderColor:'#38bdf8', borderWidth:2, borderDash:[7,4], pointRadius:0, tension:0.42, fill:false },
+        {
+          label: "Actual",
+          data: closes,
+          borderColor: "#00E5A8",
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.4,
+          fill: true,
+          backgroundColor: 'rgba(0, 229, 168, 0.04)'
+        },
+        {
+          label: "AI Forecast",
+          data: pred,
+          borderColor: "#00BFFF",
+          borderWidth: 2,
+          borderDash: [6, 6],
+          pointRadius: 0,
+          tension: 0.4,
+          fill: false
+        }
       ]
     },
     options: {
@@ -478,14 +496,33 @@ function setCards(d) {
   if (confLblEl) confLblEl.textContent = d.conf_lbl || '';
   if (confBadgeEl) confBadgeEl.textContent = d.conf_badge || '';
 
-  /* Signal bars */
-  const bars = document.querySelectorAll('.signal-bars .bar');
-  if (bars.length > 0) {
-    const sc = d.signal >= 4 ? 'active' : d.signal >= 3 ? 'mid' : 'low';
-    bars.forEach((b,i) => { b.className = 'bar b'+(i+1); if(i < d.signal) b.classList.add(sc); });
-  }
+  /* Signal bars - FIXED LOGIC */
+  const signal = d.signal;
+  const signalLabel = d.signal_lbl;
+
   const signalLblEl = document.getElementById('signalLbl');
-  if (signalLblEl) signalLblEl.textContent = d.signal_lbl || '';
+  if (signalLblEl) signalLblEl.textContent = signalLabel;
+
+  const bars = document.querySelectorAll('.signal-bars .bar');
+  bars.forEach((bar, index) => {
+    bar.classList.remove("active");
+  });
+
+  if (signal === 1) {
+    // BUY - activate middle and upper bars
+    if (bars[2]) bars[2].classList.add("active");
+    if (bars[3]) bars[3].classList.add("active");
+    if (bars[4]) bars[4].classList.add("active");
+  }
+  else if (signal === 0) {
+    // HOLD - activate middle bar only
+    if (bars[2]) bars[2].classList.add("active");
+  }
+  else if (signal === -1) {
+    // SELL - activate lower bars
+    if (bars[0]) bars[0].classList.add("active");
+    if (bars[1]) bars[1].classList.add("active");
+  }
 
   /* Merged AI Reasoning + Analysis */
   const rListEl = document.getElementById('rList');
@@ -588,19 +625,40 @@ async function refresh() {
       }
     }
     
-    // Render chart with history API data
+    // Render chart with history API data and real forecast
     if (histR && histR.ok && histR.data) {
       const historyData = histR.data;
+      const actualData = historyData.map(item => item.close);
       const labels = historyData.map(item => item.date);
-      const closes = historyData.map(item => item.close);
       
-      if (labels.length > 0 && closes.length > 0) {
-        const step = Math.max(1, Math.floor(labels.length / 120));
+      // USE REAL FORECAST FROM API
+      const forecast = histR.forecast || [];
+      
+      // Extend labels for future
+      const futureLabels = [...labels];
+      for (let i = 1; i <= forecast.length; i++) {
+        futureLabels.push("F+" + i);
+      }
+      
+      // MERGE DATA
+      const forecastDataFull = [
+        ...Array(actualData.length - 1).fill(null),
+        actualData[actualData.length - 1],
+        ...forecast
+      ];
+      
+      const actualDataFull = [
+        ...actualData,
+        ...Array(forecast.length).fill(null)
+      ];
+      
+      if (futureLabels.length > 0 && (actualDataFull.length > 0 || forecastDataFull.length > 0)) {
+        const step = Math.max(1, Math.floor(futureLabels.length / 120));
         try {
           buildChart(
-            labels.filter((_,i) => i%step===0),
-            closes.filter((_,i) => i%step===0),
-            closes.filter((_,i) => i%step===0) // Use same data for prediction line
+            futureLabels.filter((_,i) => i%step===0),
+            actualDataFull.filter((_,i) => i%step===0),
+            forecastDataFull.filter((_,i) => i%step===0)
           );
           const chartSubEl = document.getElementById('chartSub');
           if (chartSubEl) chartSubEl.textContent = `${ticker} · ${months} Month View`;

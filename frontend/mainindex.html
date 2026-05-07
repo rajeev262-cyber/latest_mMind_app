@@ -596,100 +596,128 @@ function setCards(d) {
 
 /* ── Refresh dashboard ─────────────────────────────────── */
 async function refresh() {
-  // ── Step 1: Read ticker from dropdown (source of truth) ──
-  // Falls back to URL param, then defaults to TCS.
+
+  // ── Step 1: Ticker — dropdown is always source of truth ──
   const stockDropdown = document.getElementById('stockSel');
   const ticker = (stockDropdown && stockDropdown.value)
     || new URLSearchParams(window.location.search).get('ticker')
     || 'TCS';
 
-  console.log('refresh() called for ticker:', ticker);
+  // Sync the range selector
+  const rangeSel = document.getElementById('rangeSel');
+  const rangeMap = { '6': '6m', '12': '1y', '36': '3y', '60': '5y' };
+  const rangeParam = rangeMap[rangeSel?.value] || '6m';
 
-  const API_BASE = 'https://marketmind-backend-w8gx.onrender.com/api';
+  console.log(`refresh() → ticker: ${ticker}, range: ${rangeParam}`);
 
-  /** Fetch JSON safely — returns null on any failure */
+  // Use API_CONFIG if loaded, otherwise fall back to hardcoded base
+  const BASE = (typeof API_CONFIG !== 'undefined')
+    ? API_CONFIG.BACKEND_URL
+    : 'https://marketmind-backend-w8gx.onrender.com';
+
+  /** Safely fetch JSON — returns null on any failure */
   async function safeFetch(url) {
     try {
-      const response = await fetch(url);
-      if (!response.ok) { console.warn('API failed:', url, response.status); return null; }
-      const text = await response.text();
-      if (!text || text.trim().startsWith('Not Found') || text.trim().startsWith('<!')) {
-        console.warn('Invalid response body:', url);
+      const res = await fetch(url);
+      if (!res.ok) { console.warn('API failed:', res.status, url); return null; }
+      const text = await res.text();
+      if (!text || text.trim().startsWith('<!') || text.trim() === 'Not Found') {
+        console.warn('Non-JSON response from:', url);
         return null;
       }
       return JSON.parse(text);
     } catch (err) {
-      console.error('Fetch error:', url, err);
+      console.error('safeFetch error:', url, err.message);
       return null;
     }
   }
 
   try {
-    // ── Step 2: Fetch prediction + analysis in parallel ──
-    const [prediction, analysis] = await Promise.all([
-      safeFetch(`${API_BASE}/stocks/predict?ticker=${ticker}`),
-      safeFetch(`${API_BASE}/stocks/analysis?ticker=${ticker}&range=6m`)
+
+    // ── Step 2: Fire all three endpoints in parallel ──
+    //
+    //  /predict  → trend, risk, signal, confidence (metric cards)
+    //  /analysis → analysis text + reasoning list
+    //  /history  → data[]{date,label,close,...} + forecast[] (THE CHART DATA)
+    //
+    const [prediction, analysis, historyResp] = await Promise.all([
+      safeFetch(`${BASE}/api/stocks/predict?ticker=${ticker}`),
+      safeFetch(`${BASE}/api/stocks/analysis?ticker=${ticker}&range=${rangeParam}`),
+      safeFetch(`${BASE}/api/stocks/history?ticker=${ticker}&range=${rangeParam}`)
     ]);
 
     console.log('Prediction:', prediction);
-    console.log('Analysis:', analysis);
+    console.log('Analysis  :', analysis);
+    console.log('History   :', historyResp);
 
-    // ── Step 3: Handle API failure gracefully ──
-    if (!prediction && !analysis) {
-      console.warn('Both API endpoints unavailable — showing fallback UI');
+    // ── Step 3: Handle full API outage ──
+    if (!prediction && !analysis && !historyResp) {
+      console.warn('All API endpoints unavailable');
       showChartEmptyState('Backend unavailable — please try again later');
-      const reasoningEl = document.getElementById('aiReasoningList');
-      if (reasoningEl) reasoningEl.innerHTML = '<li>Backend connection unavailable — please try again later</li>';
-      const analysisEl = document.getElementById('marketAnalysisText');
-      if (analysisEl) analysisEl.textContent = 'Unable to connect to analysis service — please refresh';
-      const bars = document.querySelectorAll('#signalBars .bar');
-      bars.forEach(b => b.classList.remove('active', 'mid', 'low'));
+      const rEl = document.getElementById('aiReasoningList');
+      if (rEl) rEl.innerHTML = '<li>Backend connection unavailable — please try again later</li>';
+      const aEl = document.getElementById('marketAnalysisText');
+      if (aEl) aEl.textContent = 'Unable to connect to analysis service — please refresh';
       return;
     }
 
-    // ── Step 4: Build Chart — try multiple data sources ──
-    // Priority: prediction.history → analysis.closes → analysis.prices → empty state
-    let chartLabels = null;
-    let chartCloses = null;
+    // ── Step 4: Build Chart from /history response ──
+    //
+    // historyResp shape:
+    //   { ok, ticker, meta:{name,sector,mcap}, data:[{date,label,close,...}], forecast:[] }
+    //
+    const histData = historyResp?.data;   // array of OHLCV rows
+    const histForecast = historyResp?.forecast; // server-computed AI forecast values
 
-    // Source A: prediction.history = [{date, price}, ...]
-    if (prediction && Array.isArray(prediction.history) && prediction.history.length > 0) {
-      chartLabels = prediction.history.map(p => p.date || '');
-      chartCloses = prediction.history.map(p => Number(p.price || p.close || 0));
-      console.log('Chart data source: prediction.history', chartCloses.length, 'points');
-    }
-    // Source B: analysis has labels + closes arrays
-    else if (analysis && Array.isArray(analysis.closes) && analysis.closes.length > 0) {
-      chartCloses = analysis.closes.map(Number);
-      chartLabels = Array.isArray(analysis.labels) && analysis.labels.length === chartCloses.length
-        ? analysis.labels
-        : generateLabels(chartCloses.length);
-      console.log('Chart data source: analysis.closes', chartCloses.length, 'points');
-    }
-    // Source C: analysis has prices array
-    else if (analysis && Array.isArray(analysis.prices) && analysis.prices.length > 0) {
-      chartCloses = analysis.prices.map(Number);
-      chartLabels = generateLabels(chartCloses.length);
-      console.log('Chart data source: analysis.prices', chartCloses.length, 'points');
-    }
+    if (Array.isArray(histData) && histData.length > 0) {
 
-    if (chartLabels && chartCloses && chartCloses.length > 0) {
-      // Compute a simple moving-average forecast line
-      const forecast = chartCloses.map((v, i, a) => {
-        const window7 = a.slice(Math.max(0, i - 7), i + 8);
-        return +(window7.reduce((s, x) => s + x, 0) / window7.length).toFixed(2);
-      });
-      buildChart(chartLabels, chartCloses, forecast);
+      // X-axis: use the server's pre-formatted 'label' when non-empty, else the ISO date
+      const labels = histData.map(r => r.label || r.date || '');
+
+      // Y-axis: closing prices
+      const closes = histData.map(r => Number(r.close));
+
+      // AI Forecast line:
+      // The server already computed forecast[] (10 future values).
+      // Pad the historical region with null so the forecast only
+      // appears at the right-hand end of the chart.
+      let forecastLine;
+      if (Array.isArray(histForecast) && histForecast.length > 0) {
+        const nullPad = new Array(closes.length).fill(null);
+        // Replace the last N entries with forecast values (overlap = last actual price)
+        forecastLine = [...nullPad];
+        forecastLine[closes.length - 1] = closes[closes.length - 1]; // anchor to last actual
+        // Append future points as extra labels/data
+        histForecast.forEach((val, i) => {
+          const futureIdx = closes.length + i;
+          labels[futureIdx] = `F${i + 1}`; // future label placeholder
+          closes[futureIdx] = null;         // no actual data in future
+          forecastLine[futureIdx] = val;
+        });
+      } else {
+        // Fallback: compute a 7-day moving average as forecast
+        forecastLine = closes.map((v, i, a) => {
+          if (v === null) return null;
+          const w = a.slice(Math.max(0, i - 7), i + 8).filter(x => x !== null);
+          return +(w.reduce((s, x) => s + x, 0) / w.length).toFixed(2);
+        });
+      }
+
+      buildChart(labels, closes, forecastLine);
+
+      // Update chart subtitle with stock name from meta
+      const stockName = historyResp?.meta?.name || ticker;
+      const chartSubEl = document.getElementById('chartSub');
+      if (chartSubEl) chartSubEl.textContent = `${stockName} · ${rangeParam.toUpperCase()} View`;
+
+      console.log(`Chart rendered: ${closes.filter(Boolean).length} actual points, ${histForecast?.length || 0} forecast points`);
+
     } else {
-      console.warn('No chart data found in prediction or analysis response');
-      showChartEmptyState('No historical data available for ' + ticker);
+      console.warn('History endpoint returned no data rows for', ticker);
+      showChartEmptyState(`No historical data available for ${ticker}`);
     }
 
-    // ── Step 5: Update chartSub label ──
-    const chartSubEl = document.getElementById('chartSub');
-    if (chartSubEl) chartSubEl.textContent = `${ticker} · Live Dashboard`;
-
-    // ── Step 6: Populate AI Reasoning ──
+    // ── Step 5: Populate AI Reasoning — from analysis.reasoning ──
     const reasoningEl = document.getElementById('aiReasoningList');
     if (reasoningEl) {
       const items = analysis?.reasoning || prediction?.reasons || [];
@@ -698,43 +726,49 @@ async function refresh() {
           .map(r => `<li>• ${typeof r === 'string' ? r : (r.text || '')}</li>`)
           .join('');
       } else {
-        reasoningEl.innerHTML = '<li>No reasoning available from API</li>';
+        reasoningEl.innerHTML = '<li>No reasoning data available from API</li>';
       }
     }
 
-    // ── Step 7: Populate Market Analysis text ──
+    // ── Step 6: Populate Market Analysis text ──
     const analysisTextEl = document.getElementById('marketAnalysisText');
     if (analysisTextEl) {
       analysisTextEl.textContent =
-        analysis?.analysis || analysis?.summary || prediction?.analysis || 'No analysis available';
+        analysis?.analysis || prediction?.analysis || 'No market analysis available.';
     }
 
-    // ── Step 8: Update signal bars ──
+    // ── Step 7: Signal bars ──
     const signal = Number(prediction?.signal ?? analysis?.signal ?? 0);
     const signalLblEl = document.getElementById('signalLbl');
-    if (signalLblEl) signalLblEl.textContent = prediction?.signal_lbl || analysis?.signal_lbl || 'Hold';
+    if (signalLblEl) signalLblEl.textContent = prediction?.signal_lbl || analysis?.signal_lbl || 'HOLD';
 
     const bars = document.querySelectorAll('#signalBars .bar');
     if (bars.length > 0) {
       bars.forEach(b => b.classList.remove('active', 'mid', 'low'));
-      if (signal === 1)       { bars[2]?.classList.add('active'); bars[3]?.classList.add('active'); }
-      else if (signal === 0)  { bars[2]?.classList.add('active'); }
+      if      (signal ===  1) { bars[2]?.classList.add('active'); bars[3]?.classList.add('active'); bars[4]?.classList.add('active'); }
+      else if (signal ===  0) { bars[2]?.classList.add('active'); }
       else if (signal === -1) { bars[0]?.classList.add('active'); bars[1]?.classList.add('active'); }
-      else                    { bars[2]?.classList.add('active'); } // default Hold
+      else                    { bars[2]?.classList.add('active'); } // default HOLD
     }
 
-    // ── Step 9: Populate metric cards ──
-    if (typeof setCards === 'function' && (prediction || analysis)) {
-      setCards({ ...(analysis || {}), ...(prediction || {}) });
+    // ── Step 8: Metric cards — merge prediction + analysis ──
+    if (typeof setCards === 'function') {
+      // analysis has trend/confidence/risk; prediction has trend_dir/badge/signal_lbl etc.
+      // Merge so setCards gets a complete object.
+      const cardData = {
+        ...(analysis  || {}),
+        ...(prediction || {})
+      };
+      setCards(cardData);
     }
 
   } catch (error) {
     console.error('refresh() crashed:', error);
-    showChartEmptyState('Error loading data — please refresh');
-    const analysisEl = document.getElementById('marketAnalysisText');
-    if (analysisEl) analysisEl.textContent = 'Unable to load data — please refresh';
-    const reasoningEl = document.getElementById('aiReasoningList');
-    if (reasoningEl) reasoningEl.innerHTML = '<li>Unable to load data — please refresh</li>';
+    showChartEmptyState('Error loading data — please refresh the page');
+    const aEl = document.getElementById('marketAnalysisText');
+    if (aEl) aEl.textContent = 'Unable to load data — please refresh';
+    const rEl = document.getElementById('aiReasoningList');
+    if (rEl) rEl.innerHTML = '<li>Unable to load data — please refresh</li>';
   } finally {
     console.log('refresh() completed for', ticker);
   }
@@ -744,7 +778,7 @@ function runPredict() {
   refresh();
 }
 
-window.addEventListener("DOMContentLoaded", refresh);
+window.addEventListener('DOMContentLoaded', refresh);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </body>

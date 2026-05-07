@@ -492,44 +492,43 @@ function setCards(d) {
   if (confLblEl) confLblEl.textContent = d.conf_lbl || '';
   if (confBadgeEl) confBadgeEl.textContent = d.conf_badge || '';
 
-  /* Signal bars - WORKING VERSION */
+  /* Signal bars - uses class="bar" matching the HTML */
   const signal = d.signal ?? 3;
 
-  const signalBars = document.querySelectorAll(".signal-bar");
-  const signalLabel = document.getElementById("signal-label");
+  const signalBars = document.querySelectorAll("#signalBars .bar");
+  const signalLabelEl = document.getElementById("signalLbl");
 
   // reset all bars
-  signalBars.forEach(bar => bar.classList.remove("active"));
+  signalBars.forEach(bar => bar.classList.remove("active", "mid", "low"));
 
   // apply signal logic
   if (signal === 1) {
     signalBars[2]?.classList.add("active");
     signalBars[3]?.classList.add("active");
-  }
-  else if (signal === 0) {
+  } else if (signal === 0) {
     signalBars[2]?.classList.add("active");
-  }
-  else if (signal === -1) {
+  } else if (signal === -1) {
     signalBars[0]?.classList.add("active");
     signalBars[1]?.classList.add("active");
-  }
-  else {
+  } else {
     // Default to Hold (signal = 3)
     signalBars[2]?.classList.add("active");
   }
 
-  if (signalLabel) {
-    signalLabel.textContent = d.signal_lbl || "Hold";
+  if (signalLabelEl) {
+    signalLabelEl.textContent = d.signal_lbl || "Hold";
   }
 
-  /* Merged AI Reasoning + Analysis */
-  const rListEl = document.getElementById('rList');
+  /* AI Reasoning — uses id="aiReasoningList" matching the HTML */
+  const rListEl = document.getElementById('aiReasoningList');
   if (rListEl) {
     rListEl.innerHTML = (d.reasons||[]).map(r =>
-      `<div class="r-row ${r.warn?'warn':''}"><div class="r-dot"></div><span>${r.text || 'Analysis point'}</span></div>`
+      `<li>${r.text || 'Analysis point'}</li>`
     ).join('');
   }
-  const anTextEl = document.getElementById('anText');
+
+  /* Market Analysis — uses id="marketAnalysisText" matching the HTML */
+  const anTextEl = document.getElementById('marketAnalysisText');
   if (anTextEl) anTextEl.textContent = d.analysis || 'No analysis available';
 }
 
@@ -570,144 +569,106 @@ async function refresh() {
     console.log("Prediction:", prediction);
     console.log("Analysis:", analysis);
 
-    // ADD FALLBACK HANDLING FOR API FAILURES
+    // HANDLE API FAILURES — uses correct HTML IDs
     if (!prediction || !analysis) {
       console.warn("API data unavailable, using fallback");
-      
-      // FALLBACK AI REASONING
-      const reasoningList = document.getElementById("reasoningList");
+
+      // Fallback AI Reasoning — id="aiReasoningList"
+      const reasoningList = document.getElementById("aiReasoningList");
       if (reasoningList) {
-        reasoningList.innerHTML = "<li>Backend connection unavailable - please try again later</li>";
+        reasoningList.innerHTML = "<li>Backend connection unavailable — please try again later</li>";
       }
 
-      // FALLBACK MARKET ANALYSIS (SAFE DOM CHECKS)
-      const analysisText = document.getElementById("analysisText");
+      // Fallback Market Analysis — id="marketAnalysisText"
+      const analysisText = document.getElementById("marketAnalysisText");
       if (analysisText) {
-        analysisText.textContent = "Unable to connect to analysis service - please refresh the page";
-      } else {
-        console.warn("analysisText not found — check HTML ID");
+        analysisText.textContent = "Unable to connect to analysis service — please refresh the page";
       }
 
-      // FALLBACK SIGNAL STRENGTH
-      const signalText = document.getElementById("signalText");
-      if (signalText) signalText.textContent = "No Signal";
+      // Fallback Signal Bars — class="bar" inside #signalBars
+      const bars = document.querySelectorAll("#signalBars .bar");
+      bars.forEach(bar => bar.classList.remove("active", "mid", "low"));
 
-      const bars = document.querySelectorAll(".signal-bar");
-      bars.forEach(bar => bar.classList.remove("active"));
-      
-      return; // Exit early since we don't have valid data
+      return; // Exit early
     }
 
-    // ADD DEBUG LOGS (TO VERIFY IDs)
-    console.log("Checking DOM elements:");
-    console.log("reasoningList:", document.getElementById("reasoningList"));
-    console.log("analysisText:", document.getElementById("analysisText"));
-    console.log("signalText:", document.getElementById("signalText"));
-
-    // FIX AI REASONING (SAFE DOM CHECKS)
-    const reasoningList = document.getElementById("reasoningList");
-
+    // ── Populate AI Reasoning — id="aiReasoningList" ──
+    const reasoningList = document.getElementById("aiReasoningList");
     if (reasoningList) {
-        if (analysis && Array.isArray(analysis.reasoning)) {
-            reasoningList.innerHTML = analysis.reasoning
-                .map(r => `<li>• ${typeof r === "string" ? r : r.text}</li>`)
-                .join("");
-        } else {
-            reasoningList.innerHTML = "<li>No reasoning available</li>";
-        }
+      if (analysis && Array.isArray(analysis.reasoning)) {
+        reasoningList.innerHTML = analysis.reasoning
+          .map(r => `<li>• ${typeof r === "string" ? r : r.text}</li>`)
+          .join("");
+      } else {
+        reasoningList.innerHTML = "<li>No reasoning available</li>";
+      }
     } else {
-        console.warn("reasoningList not found — check HTML ID");
+      console.warn("aiReasoningList not found — check HTML ID");
     }
 
-    // FIX MARKET ANALYSIS TEXT (SAFE DOM CHECKS)
-    const analysisText = document.getElementById("analysisText");
-
+    // ── Populate Market Analysis — id="marketAnalysisText" ──
+    const analysisText = document.getElementById("marketAnalysisText");
     if (analysisText) {
-        analysisText.textContent =
-                analysis?.analysis || "No analysis available";
+      analysisText.textContent = analysis?.analysis || "No analysis available";
     } else {
-        console.warn("analysisText not found — check HTML ID");
+      console.warn("marketAnalysisText not found — check HTML ID");
     }
 
-    // FIX SIGNAL STRENGTH (SAFE DOM ACCESS)
+    // ── Signal Bars — class="bar" inside #signalBars ──
     try {
       const signal = Number(prediction?.signal ?? 0);
-      const signalLabel = prediction?.signal_lbl || "Hold";
+      const signalLabelEl = document.getElementById("signalLbl");
+      if (signalLabelEl) signalLabelEl.textContent = prediction?.signal_lbl || "Hold";
 
-      const signalText = document.getElementById("signalText");
-      if (signalText) signalText.textContent = signalLabel;
-
-      const bars = document.querySelectorAll(".signal-bar");
-
+      const bars = document.querySelectorAll("#signalBars .bar");
       if (bars.length > 0) {
-        bars.forEach(bar => bar.classList.remove("active"));
-
-        // apply signal logic
+        bars.forEach(bar => bar.classList.remove("active", "mid", "low"));
         if (signal === 1) {
           bars[2]?.classList.add("active");
           bars[3]?.classList.add("active");
-        }
-        else if (signal === 0) {
+        } else if (signal === 0) {
           bars[2]?.classList.add("active");
-        }
-        else if (signal === -1) {
+        } else if (signal === -1) {
           bars[0]?.classList.add("active");
           bars[1]?.classList.add("active");
+        } else {
+          bars[2]?.classList.add("active"); // default Hold
         }
       } else {
-        console.warn("signal bars not found");
+        console.warn("Signal bars not found — check #signalBars .bar");
       }
     } catch (err) {
-      console.error("UI update error:", err);
-    } finally {
-      console.log("UI update completed");
+      console.error("Signal UI update error:", err);
     }
+
+    // ── Build chart with live API data if available ──
+    if (analysis && Array.isArray(analysis.labels) && Array.isArray(analysis.closes)) {
+      const pred = analysis.closes.map((v, i, a) => {
+        const w = a.slice(Math.max(0, i - 7), i + 8);
+        return +(w.reduce((s, x) => s + x, 0) / w.length).toFixed(2);
+      });
+      if (typeof buildChart === 'function') {
+        buildChart(analysis.labels, analysis.closes, pred);
+      }
+    }
+
+    const chartSubEl = document.getElementById('chartSub');
+    if (chartSubEl) chartSubEl.textContent = `${ticker} · Dashboard View`;
+
+    // ── Populate metric cards from prediction data ──
+    if (typeof setCards === 'function' && prediction) {
+      setCards(prediction);
+    }
+
   } catch (error) {
     console.error('Refresh function failed:', error);
+    // Minimal safe fallback
+    const analysisEl = document.getElementById('marketAnalysisText');
+    if (analysisEl) analysisEl.textContent = 'Unable to load data — please refresh';
+    const reasoningEl = document.getElementById('aiReasoningList');
+    if (reasoningEl) reasoningEl.innerHTML = '<li>Unable to load data — please refresh</li>';
   } finally {
-    console.log("Refresh function completed");
-  }
-
-    const d=new Date(now); d.setDate(now.getDate()-(pts-i)*2);
-      labels.push(i%(Math.floor(pts/6))===0?d.toLocaleString('default',{month:'short',year:'2-digit'}):'');
-    }
-    const pred=closes.map((v,i,a)=>{const w=a.slice(Math.max(0,i-7),i+8);return+(w.reduce((s,x)=>s+x,0)/w.length).toFixed(2);});
-    
-    // Guard against undefined buildChart and safe array access
-    if (typeof buildChart === 'function' && labels.length > 0 && closes.length > 0) {
-      buildChart(labels,closes,pred);
-    }
-    
-    const chartSubEl = document.getElementById('chartSub');
-    if (chartSubEl) chartSubEl.textContent=`${safeTicker} · ${safeMonths} Month View`;
-    
-    // Update analysis sections with fallback data
-    const marketAnalysisEl = document.getElementById("marketAnalysisText");
-    if (marketAnalysisEl) {
-      marketAnalysisEl.innerText = 'Using offline analysis data - backend connection unavailable';
-    }
-    
-    const listEl = document.getElementById("aiReasoningList");
-    if (listEl) {
-      listEl.innerHTML = '';
-      const fallbackLi = document.createElement("li");
-      fallbackLi.innerText = 'Offline mode - showing synthetic analysis data';
-      listEl.appendChild(fallbackLi);
-    }
-    
-    setCards({ 
-      trend:'Sideways',trend_dir:'side',trend_badge:'Neutral',
-      risk:'Medium Risk',risk_lv:'mid',risk_badge:'MED',
-      confidence:65,conf_lbl:'Moderate Confidence',conf_badge:'MED',
-      signal:3,signal_lbl:'Hold',
-      reasons:[{text:'Backend offline — using synthetic data',warn:true}],
-      analysis:'Start backend with: node server.js' 
-    });
-  } catch (error) {
-    console.error('Fallback function failed:', error);
-    // Even fallback can fail, so provide minimal UI updates
-    const anTextEl = document.getElementById('anText');
-    if (anTextEl) anTextEl.textContent = 'Unable to load data - please refresh';
+    console.log('Refresh function completed');
   }
 }
 

@@ -495,7 +495,7 @@ function buildChart(labels, closes, pred) {
           // ── AI Forecast dashed line ──────────────────────────────────
           label: 'AI Forecast',
           data: pred,
-          borderColor: '#38bdf8',
+          borderColor: '#6C63FF',
           borderWidth: 2,
           showLine: true,
           spanGaps: true,
@@ -792,17 +792,21 @@ async function refresh() {
       // Y-axis: closing prices
       const closes = histData.map(r => Number(r.close));
 
-      // AI Forecast line:
-      // The server already computed forecast[] (10 future values).
-      // Pad the historical region with null so the forecast only
-      // appears at the right-hand end of the chart.
+      // AI Forecast line with seamless connection:
+      // Create a bridge point where the last actual value connects to the first forecast value
       let forecastLine;
       if (Array.isArray(histForecast) && histForecast.length > 0) {
-        const nullPad = new Array(closes.length).fill(null);
-        // Replace the last N entries with forecast values (overlap = last actual price)
-        forecastLine = [...nullPad];
-        forecastLine[closes.length - 1] = closes[closes.length - 1]; // anchor to last actual
-        // Append future points as extra labels/data
+        // Identify the bridge point - last actual data point
+        const bridgePointIndex = closes.length - 1;
+        const bridgeValue = closes[bridgePointIndex];
+        
+        // Create aligned forecast array with proper null padding
+        forecastLine = new Array(closes.length).fill(null);
+        
+        // Set the bridge point - both datasets share this exact value
+        forecastLine[bridgePointIndex] = bridgeValue;
+        
+        // Append future forecast points with seamless connection
         histForecast.forEach((val, i) => {
           const futureIdx = closes.length + i;
           labels[futureIdx] = `F${i + 1}`; // future label placeholder
@@ -817,6 +821,16 @@ async function refresh() {
           return +(w.reduce((s, x) => s + x, 0) / w.length).toFixed(2);
         });
       }
+
+      // Debug: Verify seamless connection
+      console.log('Bridge Point:', {
+        bridgeIndex: closes.length - 1,
+        bridgeValue: closes[closes.length - 1],
+        forecastBridgeValue: forecastLine[closes.length - 1],
+        totalLabels: labels.length,
+        actualPoints: closes.filter(v => v !== null).length,
+        forecastPoints: forecastLine.filter(v => v !== null).length
+      });
 
       buildChart(labels, closes, forecastLine);
 

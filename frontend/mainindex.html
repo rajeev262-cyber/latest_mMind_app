@@ -495,13 +495,15 @@ function buildChart(labels, closes, pred) {
           // ── AI Forecast dashed line ──────────────────────────────────
           label: 'AI Forecast',
           data: pred,
-          borderColor: '#00BFFF',
-          borderWidth: 2.5,
+          borderColor: '#38bdf8',
+          borderWidth: 2,
+          showLine: true,
+          spanGaps: true,
           borderDash: [5, 5],
           pointRadius: 0,
           pointHitRadius: 10,
           pointHoverRadius: 5,
-          pointHoverBackgroundColor: '#00BFFF',
+          pointHoverBackgroundColor: '#38bdf8',
           pointHoverBorderColor: '#0b121e',
           pointHoverBorderWidth: 2,
           tension: 0.4,
@@ -580,6 +582,7 @@ function buildChart(labels, closes, pred) {
         },
         y: {
           position: 'right',
+          beginAtZero: false,
           ticks: {
             color: '#3d5a73',
             font: { family: "'Inter', 'system-ui', sans-serif", size: 10 },
@@ -601,6 +604,7 @@ function buildChart(labels, closes, pred) {
   });
 
   window.stockChart = chart;
+  console.log('Forecast Dataset:', chart.data.datasets[1]);
   console.log(`Chart built — ${closes.filter(Boolean).length} actual + ${pred.filter(Boolean).length} forecast points`);
 }
 

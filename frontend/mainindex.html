@@ -456,67 +456,151 @@ function buildChart(labels, closes, pred) {
   const ctx = canvasEl.getContext('2d');
   if (!ctx) { console.warn('Could not get 2d context'); return; }
 
+  // ── Area gradient for the Actual price line ──────────────────────────
+  // Fills from a rich teal at the top to fully transparent at the bottom,
+  // anchoring the line and giving the chart depth.
+  const chartHeight = canvasEl.offsetHeight || canvasEl.height || 300;
+  const areaGradient = ctx.createLinearGradient(0, 0, 0, chartHeight);
+  areaGradient.addColorStop(0,   'rgba(0, 229, 168, 0.22)');
+  areaGradient.addColorStop(0.55,'rgba(0, 229, 168, 0.06)');
+  areaGradient.addColorStop(1,   'rgba(0, 229, 168, 0.00)');
+
+  // ── Forecast glow gradient ─────────────────────────────────────────────
+  const forecastGradient = ctx.createLinearGradient(0, 0, 0, chartHeight);
+  forecastGradient.addColorStop(0,   'rgba(0, 191, 255, 0.10)');
+  forecastGradient.addColorStop(1,   'rgba(0, 191, 255, 0.00)');
+
   chart = new Chart(ctx, {
     type: 'line',
     data: {
       labels,
       datasets: [
         {
+          // ── Actual price line ────────────────────────────────────────
           label: 'Actual',
           data: closes,
           borderColor: '#00E5A8',
-          borderWidth: 1.8,
+          borderWidth: 2,
           pointRadius: 0,
+          pointHoverRadius: 6,
+          pointHoverBackgroundColor: '#00E5A8',
+          pointHoverBorderColor: '#0b121e',
+          pointHoverBorderWidth: 2,
           tension: 0.4,
           fill: true,
-          backgroundColor: 'rgba(0,229,168,0.06)'
+          backgroundColor: areaGradient,
+          order: 2
         },
         {
+          // ── AI Forecast dashed line ──────────────────────────────────
           label: 'AI Forecast',
           data: pred,
-          borderColor: '#00BFFF',
-          borderWidth: 2,
-          borderDash: [6, 4],
+          borderColor: '#38bdf8',
+          borderWidth: 1.8,
+          borderDash: [7, 4],
           pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#38bdf8',
+          pointHoverBorderColor: '#0b121e',
+          pointHoverBorderWidth: 2,
           tension: 0.4,
-          fill: false
+          fill: true,
+          backgroundColor: forecastGradient,
+          order: 1
         }
       ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 500 },
+
+      // Smooth entrance animation
+      animation: {
+        duration: 600,
+        easing: 'easeInOutQuart'
+      },
+
+      // Index-based interaction so tooltip fires anywhere along a vertical
       interaction: { mode: 'index', intersect: false },
+
       plugins: {
         legend: { display: false },
+
         tooltip: {
-          backgroundColor: '#0a1e30',
-          borderColor: '#1a3a55',
+          // ── Premium dark tooltip ─────────────────────────────────────
+          mode: 'index',
+          intersect: false,
+          backgroundColor: '#0b121e',
+          borderColor: '#1e293b',
           borderWidth: 1,
-          titleColor: '#d8eaf6',
-          bodyColor: '#4a7090',
-          padding: 10,
-          cornerRadius: 8
+          titleColor: '#e2eaf4',
+          titleFont: { family: "'Inter', 'system-ui', sans-serif", size: 11, weight: '600' },
+          bodyColor: '#7a9ab5',
+          bodyFont: { family: "'Inter', 'system-ui', sans-serif", size: 12 },
+          padding: { top: 10, right: 14, bottom: 10, left: 14 },
+          cornerRadius: 8,
+          displayColors: true,
+          boxWidth: 10,
+          boxHeight: 10,
+          boxPadding: 4,
+          usePointStyle: false,
+          callbacks: {
+            title(items) {
+              return items[0]?.label || '';
+            },
+            label(item) {
+              const val = item.parsed.y;
+              if (val === null || val === undefined) return null;
+              const formatted = '₹' + val.toLocaleString('en-IN', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              });
+              return ` ${item.dataset.label}: ${formatted}`;
+            }
+          }
         }
       },
       scales: {
         x: {
-          ticks: { color: '#2a4a62', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
-          grid: { color: 'rgba(255,255,255,.03)' },
-          border: { color: '#0f2438' }
+          ticks: {
+            color: '#3d5a73',
+            font: { family: "'Inter', 'system-ui', sans-serif", size: 10 },
+            maxRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 9,
+            padding: 8
+          },
+          grid: {
+            color: 'rgba(255, 255, 255, 0.04)',
+            drawOnChartArea: true,
+            drawTicks: false
+          },
+          border: { display: false }
         },
         y: {
-          ticks: { color: '#2a4a62', font: { size: 10 }, callback: v => '₹' + v.toLocaleString('en-IN') },
-          grid: { color: 'rgba(255,255,255,.04)' },
-          border: { color: '#0f2438' }
+          position: 'right',
+          ticks: {
+            color: '#3d5a73',
+            font: { family: "'Inter', 'system-ui', sans-serif", size: 10 },
+            padding: 10,
+            callback: v => '₹' + v.toLocaleString('en-IN', {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0
+            })
+          },
+          grid: {
+            color: 'rgba(255, 255, 255, 0.05)',
+            drawOnChartArea: true,
+            drawTicks: false
+          },
+          border: { display: false }
         }
       }
     }
   });
 
   window.stockChart = chart;
-  console.log(`Chart built — ${closes.length} data points for ${labels[0]} → ${labels[labels.length - 1]}`);
+  console.log(`Chart built — ${closes.filter(Boolean).length} actual + ${pred.filter(Boolean).length} forecast points`);
 }
 
 /**

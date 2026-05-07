@@ -372,58 +372,84 @@ if (hamburgerEl && sidebar && overlay) {
 }
 
 
-/* ── FIX addEventListener ERROR ───────────────────────── */
-const dropdown = document.getElementById("stock-select");
+/* ── Stock dropdown: refresh on change (no page reload) ── */
+const stockSelEl = document.getElementById("stockSel");
 
-if (dropdown) {
-  dropdown.addEventListener("change", (e) => {
-    const newTicker = e.target.value;
-    window.location.href = `mainindex.html?ticker=${newTicker}`;
-  });
+// Pre-select dropdown from URL param if present
+const _urlTicker = new URLSearchParams(window.location.search).get("ticker");
+if (stockSelEl && _urlTicker) {
+  const matchOpt = [...stockSelEl.options].find(o => o.value === _urlTicker);
+  if (matchOpt) stockSelEl.value = _urlTicker;
+}
+
+if (stockSelEl) {
+  stockSelEl.addEventListener("change", () => refresh());
 }
 
 /* ── Chart ─────────────────────────────────────────────── */
 let chart = null;
-function buildChart(labels, closes, pred) {
-  // FORCE GRAPH RESET
-  if (window.stockChart) {
-    window.stockChart.destroy();
-  }
-  
+
+/** Show a "No Data Available" message directly on the canvas */
+function showChartEmptyState(message) {
+  if (chart) { chart.destroy(); chart = null; window.stockChart = null; }
   const canvasEl = document.getElementById('myChart');
-  if (!canvasEl) {
-    console.warn('Chart canvas not found');
-    return;
-  }
-  
+  if (!canvasEl) return;
   const ctx = canvasEl.getContext('2d');
-  if (!ctx) {
-    console.warn('Could not get chart context');
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+  ctx.save();
+  ctx.fillStyle = 'rgba(56,189,248,0.18)';
+  ctx.font = '600 14px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(message || 'No Data Available', canvasEl.width / 2, canvasEl.height / 2);
+  ctx.restore();
+}
+
+/**
+ * buildChart(labels, closes, pred)
+ * labels  – string[] of date labels
+ * closes  – number[] of actual prices
+ * pred    – number[] of AI forecast values (same length as closes)
+ */
+function buildChart(labels, closes, pred) {
+  // Destroy any existing chart instances
+  if (window.stockChart) { window.stockChart.destroy(); window.stockChart = null; }
+  if (chart) { chart.destroy(); chart = null; }
+
+  const canvasEl = document.getElementById('myChart');
+  if (!canvasEl) { console.warn('Chart canvas #myChart not found'); return; }
+
+  // Guard: empty data → show message
+  if (!labels || !labels.length || !closes || !closes.length) {
+    showChartEmptyState('No historical data available for this stock');
     return;
   }
-  
-  if (chart) { chart.destroy(); chart = null; }
+
+  const ctx = canvasEl.getContext('2d');
+  if (!ctx) { console.warn('Could not get 2d context'); return; }
+
   chart = new Chart(ctx, {
     type: 'line',
     data: {
       labels,
       datasets: [
         {
-          label: "Actual",
+          label: 'Actual',
           data: closes,
-          borderColor: "#00E5A8",
-          borderWidth: 1.5,
+          borderColor: '#00E5A8',
+          borderWidth: 1.8,
           pointRadius: 0,
           tension: 0.4,
           fill: true,
-          backgroundColor: 'rgba(0, 229, 168, 0.04)'
+          backgroundColor: 'rgba(0,229,168,0.06)'
         },
         {
-          label: "AI Forecast",
+          label: 'AI Forecast',
           data: pred,
-          borderColor: "#00BFFF",
+          borderColor: '#00BFFF',
           borderWidth: 2,
-          borderDash: [6, 6],
+          borderDash: [6, 4],
           pointRadius: 0,
           tension: 0.4,
           fill: false
@@ -431,22 +457,58 @@ function buildChart(labels, closes, pred) {
       ]
     },
     options: {
-      responsive:true, maintainAspectRatio:false,
-      animation:{duration:400},
-      interaction:{mode:'index', intersect:false},
-      plugins:{
-        legend:{display:false},
-        tooltip:{ backgroundColor:'#0a1e30', borderColor:'#1a3a55', borderWidth:1, titleColor:'#d8eaf6', bodyColor:'#4a7090', padding:10, cornerRadius:8 }
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 500 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0a1e30',
+          borderColor: '#1a3a55',
+          borderWidth: 1,
+          titleColor: '#d8eaf6',
+          bodyColor: '#4a7090',
+          padding: 10,
+          cornerRadius: 8
+        }
       },
-      scales:{
-        x:{ ticks:{color:'#2a4a62', font:{size:10}, maxRotation:0, autoSkip:true, maxTicksLimit:10}, grid:{color:'rgba(255,255,255,.03)'}, border:{color:'#0f2438'} },
-        y:{ ticks:{color:'#2a4a62', font:{size:10}, callback:v=>'₹'+v.toLocaleString('en-IN')}, grid:{color:'rgba(255,255,255,.04)'}, border:{color:'#0f2438'} }
+      scales: {
+        x: {
+          ticks: { color: '#2a4a62', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
+          grid: { color: 'rgba(255,255,255,.03)' },
+          border: { color: '#0f2438' }
+        },
+        y: {
+          ticks: { color: '#2a4a62', font: { size: 10 }, callback: v => '₹' + v.toLocaleString('en-IN') },
+          grid: { color: 'rgba(255,255,255,.04)' },
+          border: { color: '#0f2438' }
+        }
       }
     }
   });
-  
-  // Store chart globally for reset
+
   window.stockChart = chart;
+  console.log(`Chart built — ${closes.length} data points for ${labels[0]} → ${labels[labels.length - 1]}`);
+}
+
+/**
+ * generateLabels(count)
+ * Produce evenly-spaced date labels going back `count` trading days from today.
+ */
+function generateLabels(count) {
+  const labels = [];
+  const now = new Date();
+  for (let i = count - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i * 2); // ~every 2 calendar days ≈ 1 trading day
+    labels.push(
+      i % Math.floor(count / 8) === 0
+        ? d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
+        : ''
+    );
+  }
+  return labels;
 }
 
 /* ── Set metric cards ──────────────────────────────────── */
@@ -534,141 +596,147 @@ function setCards(d) {
 
 /* ── Refresh dashboard ─────────────────────────────────── */
 async function refresh() {
-  try {
-    const ticker = new URLSearchParams(window.location.search).get("ticker") || "TCS";
+  // ── Step 1: Read ticker from dropdown (source of truth) ──
+  // Falls back to URL param, then defaults to TCS.
+  const stockDropdown = document.getElementById('stockSel');
+  const ticker = (stockDropdown && stockDropdown.value)
+    || new URLSearchParams(window.location.search).get('ticker')
+    || 'TCS';
 
-    // FIX API ENDPOINT URLs
-    const API_BASE = "https://marketmind-backend-w8gx.onrender.com/api";
-    
-    // Add proper error handling for JSON parsing failures
-    async function safeFetch(url) {
-      try {
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-          console.warn("API failed:", url, response.status);
-          return null;
-        }
-        
-        const text = await response.text();
-        if (!text || text.trim().startsWith("Not Found") || text.trim().startsWith("<!")) {
-          console.warn("Invalid response:", url);
-          return null;
-        }
-        
-        return JSON.parse(text);
-      } catch (err) {
-        console.error("Fetch error:", err);
+  console.log('refresh() called for ticker:', ticker);
+
+  const API_BASE = 'https://marketmind-backend-w8gx.onrender.com/api';
+
+  /** Fetch JSON safely — returns null on any failure */
+  async function safeFetch(url) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) { console.warn('API failed:', url, response.status); return null; }
+      const text = await response.text();
+      if (!text || text.trim().startsWith('Not Found') || text.trim().startsWith('<!')) {
+        console.warn('Invalid response body:', url);
         return null;
       }
-    }
-
-    const prediction = await safeFetch(`${API_BASE}/stocks/predict?ticker=${ticker}`);
-    const analysis = await safeFetch(`${API_BASE}/stocks/analysis?ticker=${ticker}&range=6m`);
-
-    console.log("Prediction:", prediction);
-    console.log("Analysis:", analysis);
-
-    // HANDLE API FAILURES — uses correct HTML IDs
-    if (!prediction || !analysis) {
-      console.warn("API data unavailable, using fallback");
-
-      // Fallback AI Reasoning — id="aiReasoningList"
-      const reasoningList = document.getElementById("aiReasoningList");
-      if (reasoningList) {
-        reasoningList.innerHTML = "<li>Backend connection unavailable — please try again later</li>";
-      }
-
-      // Fallback Market Analysis — id="marketAnalysisText"
-      const analysisText = document.getElementById("marketAnalysisText");
-      if (analysisText) {
-        analysisText.textContent = "Unable to connect to analysis service — please refresh the page";
-      }
-
-      // Fallback Signal Bars — class="bar" inside #signalBars
-      const bars = document.querySelectorAll("#signalBars .bar");
-      bars.forEach(bar => bar.classList.remove("active", "mid", "low"));
-
-      return; // Exit early
-    }
-
-    // ── Populate AI Reasoning — id="aiReasoningList" ──
-    const reasoningList = document.getElementById("aiReasoningList");
-    if (reasoningList) {
-      if (analysis && Array.isArray(analysis.reasoning)) {
-        reasoningList.innerHTML = analysis.reasoning
-          .map(r => `<li>• ${typeof r === "string" ? r : r.text}</li>`)
-          .join("");
-      } else {
-        reasoningList.innerHTML = "<li>No reasoning available</li>";
-      }
-    } else {
-      console.warn("aiReasoningList not found — check HTML ID");
-    }
-
-    // ── Populate Market Analysis — id="marketAnalysisText" ──
-    const analysisText = document.getElementById("marketAnalysisText");
-    if (analysisText) {
-      analysisText.textContent = analysis?.analysis || "No analysis available";
-    } else {
-      console.warn("marketAnalysisText not found — check HTML ID");
-    }
-
-    // ── Signal Bars — class="bar" inside #signalBars ──
-    try {
-      const signal = Number(prediction?.signal ?? 0);
-      const signalLabelEl = document.getElementById("signalLbl");
-      if (signalLabelEl) signalLabelEl.textContent = prediction?.signal_lbl || "Hold";
-
-      const bars = document.querySelectorAll("#signalBars .bar");
-      if (bars.length > 0) {
-        bars.forEach(bar => bar.classList.remove("active", "mid", "low"));
-        if (signal === 1) {
-          bars[2]?.classList.add("active");
-          bars[3]?.classList.add("active");
-        } else if (signal === 0) {
-          bars[2]?.classList.add("active");
-        } else if (signal === -1) {
-          bars[0]?.classList.add("active");
-          bars[1]?.classList.add("active");
-        } else {
-          bars[2]?.classList.add("active"); // default Hold
-        }
-      } else {
-        console.warn("Signal bars not found — check #signalBars .bar");
-      }
+      return JSON.parse(text);
     } catch (err) {
-      console.error("Signal UI update error:", err);
+      console.error('Fetch error:', url, err);
+      return null;
+    }
+  }
+
+  try {
+    // ── Step 2: Fetch prediction + analysis in parallel ──
+    const [prediction, analysis] = await Promise.all([
+      safeFetch(`${API_BASE}/stocks/predict?ticker=${ticker}`),
+      safeFetch(`${API_BASE}/stocks/analysis?ticker=${ticker}&range=6m`)
+    ]);
+
+    console.log('Prediction:', prediction);
+    console.log('Analysis:', analysis);
+
+    // ── Step 3: Handle API failure gracefully ──
+    if (!prediction && !analysis) {
+      console.warn('Both API endpoints unavailable — showing fallback UI');
+      showChartEmptyState('Backend unavailable — please try again later');
+      const reasoningEl = document.getElementById('aiReasoningList');
+      if (reasoningEl) reasoningEl.innerHTML = '<li>Backend connection unavailable — please try again later</li>';
+      const analysisEl = document.getElementById('marketAnalysisText');
+      if (analysisEl) analysisEl.textContent = 'Unable to connect to analysis service — please refresh';
+      const bars = document.querySelectorAll('#signalBars .bar');
+      bars.forEach(b => b.classList.remove('active', 'mid', 'low'));
+      return;
     }
 
-    // ── Build chart with live API data if available ──
-    if (analysis && Array.isArray(analysis.labels) && Array.isArray(analysis.closes)) {
-      const pred = analysis.closes.map((v, i, a) => {
-        const w = a.slice(Math.max(0, i - 7), i + 8);
-        return +(w.reduce((s, x) => s + x, 0) / w.length).toFixed(2);
+    // ── Step 4: Build Chart — try multiple data sources ──
+    // Priority: prediction.history → analysis.closes → analysis.prices → empty state
+    let chartLabels = null;
+    let chartCloses = null;
+
+    // Source A: prediction.history = [{date, price}, ...]
+    if (prediction && Array.isArray(prediction.history) && prediction.history.length > 0) {
+      chartLabels = prediction.history.map(p => p.date || '');
+      chartCloses = prediction.history.map(p => Number(p.price || p.close || 0));
+      console.log('Chart data source: prediction.history', chartCloses.length, 'points');
+    }
+    // Source B: analysis has labels + closes arrays
+    else if (analysis && Array.isArray(analysis.closes) && analysis.closes.length > 0) {
+      chartCloses = analysis.closes.map(Number);
+      chartLabels = Array.isArray(analysis.labels) && analysis.labels.length === chartCloses.length
+        ? analysis.labels
+        : generateLabels(chartCloses.length);
+      console.log('Chart data source: analysis.closes', chartCloses.length, 'points');
+    }
+    // Source C: analysis has prices array
+    else if (analysis && Array.isArray(analysis.prices) && analysis.prices.length > 0) {
+      chartCloses = analysis.prices.map(Number);
+      chartLabels = generateLabels(chartCloses.length);
+      console.log('Chart data source: analysis.prices', chartCloses.length, 'points');
+    }
+
+    if (chartLabels && chartCloses && chartCloses.length > 0) {
+      // Compute a simple moving-average forecast line
+      const forecast = chartCloses.map((v, i, a) => {
+        const window7 = a.slice(Math.max(0, i - 7), i + 8);
+        return +(window7.reduce((s, x) => s + x, 0) / window7.length).toFixed(2);
       });
-      if (typeof buildChart === 'function') {
-        buildChart(analysis.labels, analysis.closes, pred);
+      buildChart(chartLabels, chartCloses, forecast);
+    } else {
+      console.warn('No chart data found in prediction or analysis response');
+      showChartEmptyState('No historical data available for ' + ticker);
+    }
+
+    // ── Step 5: Update chartSub label ──
+    const chartSubEl = document.getElementById('chartSub');
+    if (chartSubEl) chartSubEl.textContent = `${ticker} · Live Dashboard`;
+
+    // ── Step 6: Populate AI Reasoning ──
+    const reasoningEl = document.getElementById('aiReasoningList');
+    if (reasoningEl) {
+      const items = analysis?.reasoning || prediction?.reasons || [];
+      if (Array.isArray(items) && items.length > 0) {
+        reasoningEl.innerHTML = items
+          .map(r => `<li>• ${typeof r === 'string' ? r : (r.text || '')}</li>`)
+          .join('');
+      } else {
+        reasoningEl.innerHTML = '<li>No reasoning available from API</li>';
       }
     }
 
-    const chartSubEl = document.getElementById('chartSub');
-    if (chartSubEl) chartSubEl.textContent = `${ticker} · Dashboard View`;
+    // ── Step 7: Populate Market Analysis text ──
+    const analysisTextEl = document.getElementById('marketAnalysisText');
+    if (analysisTextEl) {
+      analysisTextEl.textContent =
+        analysis?.analysis || analysis?.summary || prediction?.analysis || 'No analysis available';
+    }
 
-    // ── Populate metric cards from prediction data ──
-    if (typeof setCards === 'function' && prediction) {
-      setCards(prediction);
+    // ── Step 8: Update signal bars ──
+    const signal = Number(prediction?.signal ?? analysis?.signal ?? 0);
+    const signalLblEl = document.getElementById('signalLbl');
+    if (signalLblEl) signalLblEl.textContent = prediction?.signal_lbl || analysis?.signal_lbl || 'Hold';
+
+    const bars = document.querySelectorAll('#signalBars .bar');
+    if (bars.length > 0) {
+      bars.forEach(b => b.classList.remove('active', 'mid', 'low'));
+      if (signal === 1)       { bars[2]?.classList.add('active'); bars[3]?.classList.add('active'); }
+      else if (signal === 0)  { bars[2]?.classList.add('active'); }
+      else if (signal === -1) { bars[0]?.classList.add('active'); bars[1]?.classList.add('active'); }
+      else                    { bars[2]?.classList.add('active'); } // default Hold
+    }
+
+    // ── Step 9: Populate metric cards ──
+    if (typeof setCards === 'function' && (prediction || analysis)) {
+      setCards({ ...(analysis || {}), ...(prediction || {}) });
     }
 
   } catch (error) {
-    console.error('Refresh function failed:', error);
-    // Minimal safe fallback
+    console.error('refresh() crashed:', error);
+    showChartEmptyState('Error loading data — please refresh');
     const analysisEl = document.getElementById('marketAnalysisText');
     if (analysisEl) analysisEl.textContent = 'Unable to load data — please refresh';
     const reasoningEl = document.getElementById('aiReasoningList');
     if (reasoningEl) reasoningEl.innerHTML = '<li>Unable to load data — please refresh</li>';
   } finally {
-    console.log('Refresh function completed');
+    console.log('refresh() completed for', ticker);
   }
 }
 
